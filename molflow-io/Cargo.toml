@@ -1,0 +1,10 @@
+[package]
+name = "molflow-io"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+molflow-core = { path = "../molflow-core" }
+nalgebra = { workspace = true, features = ["serde-serialize"] }
+thiserror.workspace = true
+anyhow.workspace = true

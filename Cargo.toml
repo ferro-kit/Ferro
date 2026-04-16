@@ -1,0 +1,29 @@
+[workspace]
+members = [
+    "molflow-core",
+    "molflow-io",
+    "molflow-analysis",
+    "molflow-workflow",
+    "molflow-cli",
+    # "molflow-python",  # 暂时注释掉，等熟悉 Rust 后再启用
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <you@example.com>"]
+license = "MIT"
+
+[workspace.dependencies]
+# 线性代数库,用于处理坐标、矩阵计算
+nalgebra = "0.32"
+# 多维数组,用于大规模数据处理
+ndarray = "0.15"
+# 并行计算库
+rayon = "1.8"
+# 序列化/反序列化
+serde = { version = "1.0", features = ["derive"] }
+# 错误处理
+thiserror = "1.0"
+anyhow = "1.0"

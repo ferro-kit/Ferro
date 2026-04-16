@@ -1,0 +1,11 @@
+[package]
+name = "molflow-analysis"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+molflow-core = { path = "../molflow-core" }
+nalgebra = { workspace = true, features = ["serde-serialize"] }
+ndarray.workspace = true
+rayon.workspace = true
+thiserror.workspace = true
