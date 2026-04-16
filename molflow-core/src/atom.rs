@@ -1,105 +1,86 @@
 //! 原子数据结构
 
 use nalgebra::Vector3;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
-/// 原子结构
-/// 
-/// 存储原子的基本信息：元素类型、位置、速度、电荷、质量等
+/// 单个原子实例。
+///
+/// 原子在帧中的唯一标识是其在 `Frame::atoms` 中的下标，不单独存储 index 字段。
+/// `mass` 为 `None` 时，调用 [`Atom::effective_mass`] 将自动从元素表中查找标准值。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Atom {
-    /// 元素符号 (如 "C", "H", "O")
+    /// 元素符号，如 "Fe"、"O"
     pub element: String,
-    /// 原子位置坐标 (单位: Å)
+    /// Cartesian 坐标，单位 Å
     pub position: Vector3<f64>,
-    /// 原子速度 (单位: Å/ps) - 可选
-    pub velocity: Option<Vector3<f64>>,
-    /// 原子电荷 (单位: e) - 可选
+    /// 可选的人类可读标签，如 "Fe1"、"Fe2"，用于区分同种元素的不同位点
+    pub label: Option<String>,
+    /// 质量覆盖值，单位 amu；`None` 表示使用元素表标准值
+    pub mass: Option<f64>,
+    /// 初始磁矩（用于 DFT 自旋极化计算的初猜），单位 μ_B
+    pub magmom: Option<f64>,
+    /// 原子电荷，单位 e；通常由 Bader/DDEC 后处理写回
     pub charge: Option<f64>,
-    /// 原子质量 (单位: amu)
-    pub mass: f64,
-    /// 原子索引
-    pub index: usize,
 }
 
 impl Atom {
-    /// 创建新原子
-    /// 
-    /// # 示例
-    /// ```
-    /// use molflow_core::Atom;
-    /// use nalgebra::Vector3;
-    /// 
-    /// let atom = Atom::new("C", Vector3::new(0.0, 0.0, 0.0));
-    /// ```
+    /// 最简构造器，仅需元素符号和位置。
     pub fn new(element: impl Into<String>, position: Vector3<f64>) -> Self {
-        let element = element.into();
-        let mass = Self::element_mass(&element);
         Self {
-            element,
+            element: element.into(),
             position,
-            velocity: None,
+            label: None,
+            mass: None,
+            magmom: None,
             charge: None,
-            mass,
-            index: 0,
         }
     }
-    
-    /// 根据元素符号获取标准原子质量
-    fn element_mass(element: &str) -> f64 {
-        match element {
-            "H" => 1.008,
-            "C" => 12.011,
-            "N" => 14.007,
-            "O" => 15.999,
-            "P" => 30.974,
-            "S" => 32.06,
-            "F" => 18.998,
-            "Cl" => 35.45,
-            "Br" => 79.904,
-            "I" => 126.90,
-            "Na" => 22.990,
-            "K" => 39.098,
-            "Ca" => 40.078,
-            "Mg" => 24.305,
-            "Fe" => 55.845,
-            "Cu" => 63.546,
-            "Zn" => 65.38,
-            _ => 1.0, // 默认质量
-        }
+
+    /// 返回有效质量（amu）：优先使用 `mass` 字段，否则查元素表，查不到返回 1.0。
+    pub fn effective_mass(&self) -> f64 {
+        self.mass.unwrap_or_else(|| {
+            crate::data::elements::by_symbol(&self.element)
+                .map(|e| e.atomic_mass)
+                .unwrap_or(1.0)
+        })
     }
-    
-    /// 计算与另一个原子的距离
+
+    /// 计算与另一原子的 Cartesian 距离（Å），不考虑周期性。
+    /// 周期性距离请通过 [`crate::cell::Cell::minimum_image`] 处理。
     pub fn distance_to(&self, other: &Atom) -> f64 {
         (self.position - other.position).norm()
-    }
-    
-    /// 设置原子速度
-    pub fn set_velocity(&mut self, velocity: Vector3<f64>) {
-        self.velocity = Some(velocity);
-    }
-    
-    /// 设置原子电荷
-    pub fn set_charge(&mut self, charge: f64) {
-        self.charge = Some(charge);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
-    fn test_atom_creation() {
-        let atom = Atom::new("C", Vector3::new(0.0, 0.0, 0.0));
-        assert_eq!(atom.element, "C");
-        assert_eq!(atom.mass, 12.011);
+    fn test_new() {
+        let atom = Atom::new("Fe", Vector3::new(0.0, 0.0, 0.0));
+        assert_eq!(atom.element, "Fe");
+        assert!(atom.label.is_none());
+        assert!(atom.mass.is_none());
     }
-    
+
+    #[test]
+    fn test_effective_mass_from_table() {
+        let atom = Atom::new("Fe", Vector3::zeros());
+        assert!((atom.effective_mass() - 55.845).abs() < 1e-3);
+    }
+
+    #[test]
+    fn test_effective_mass_override() {
+        let mut atom = Atom::new("Fe", Vector3::zeros());
+        atom.mass = Some(56.0);
+        assert!((atom.effective_mass() - 56.0).abs() < 1e-10);
+    }
+
     #[test]
     fn test_distance() {
-        let atom1 = Atom::new("C", Vector3::new(0.0, 0.0, 0.0));
-        let atom2 = Atom::new("H", Vector3::new(1.0, 0.0, 0.0));
-        assert!((atom1.distance_to(&atom2) - 1.0).abs() < 1e-10);
+        let a = Atom::new("O", Vector3::new(0.0, 0.0, 0.0));
+        let b = Atom::new("H", Vector3::new(1.0, 0.0, 0.0));
+        assert!((a.distance_to(&b) - 1.0).abs() < 1e-10);
     }
 }

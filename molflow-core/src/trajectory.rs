@@ -1,67 +1,85 @@
 //! 轨迹数据结构
 
-use crate::Molecule;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
-/// 分子动力学轨迹
-/// 
-/// 存储多个时间步的分子结构
+use crate::frame::Frame;
+
+/// 轨迹元数据。
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct TrajectoryMetadata {
+    /// 帧间时间步长（fs）；`None` 表示静态结构或未知
+    pub timestep: Option<f64>,
+    /// 来源文件或软件名称，如 "VASP OUTCAR"、"LAMMPS dump"
+    pub source: Option<String>,
+}
+
+/// 轨迹：一个或多个帧的时间序列。
+///
+/// 单帧结构文件也以 `Trajectory { frames: vec![frame] }` 形式存储，
+/// 保证所有模块的 API 签名统一，无需区分单帧/多帧。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Trajectory {
-    /// 每个时间步的分子结构
-    pub frames: Vec<Molecule>,
-    /// 时间步长 (单位: ps)
-    pub timestep: Option<f64>,
-    /// 总时间 (单位: ps)
-    pub total_time: Option<f64>,
+    pub frames: Vec<Frame>,
+    pub metadata: TrajectoryMetadata,
 }
 
 impl Trajectory {
-    /// 创建空轨迹
+    /// 创建空轨迹。
     pub fn new() -> Self {
         Self {
             frames: Vec::new(),
-            timestep: None,
-            total_time: None,
+            metadata: TrajectoryMetadata::default(),
         }
     }
-    
-    /// 添加一帧
-    pub fn add_frame(&mut self, frame: Molecule) {
-        self.frames.push(frame);
+
+    /// 由单帧构造轨迹（结构文件读取的常用路径）。
+    pub fn from_frame(frame: Frame) -> Self {
+        Self {
+            frames: vec![frame],
+            metadata: TrajectoryMetadata::default(),
+        }
     }
-    
-    /// 获取帧数
-    pub fn frame_count(&self) -> usize {
+
+    // ── 帧访问 ───────────────────────────────────────────────────────────────
+
+    pub fn n_frames(&self) -> usize {
         self.frames.len()
     }
-    
-    /// 获取指定帧
-    pub fn get_frame(&self, index: usize) -> Option<&Molecule> {
+
+    /// 原子数（取自第一帧；假设各帧原子数一致）。
+    pub fn n_atoms(&self) -> Option<usize> {
+        self.frames.first().map(|f| f.n_atoms())
+    }
+
+    pub fn frame(&self, index: usize) -> Option<&Frame> {
         self.frames.get(index)
     }
-    
-    /// 获取第一帧
-    pub fn first_frame(&self) -> Option<&Molecule> {
+
+    pub fn frame_mut(&mut self, index: usize) -> Option<&mut Frame> {
+        self.frames.get_mut(index)
+    }
+
+    pub fn first(&self) -> Option<&Frame> {
         self.frames.first()
     }
-    
-    /// 获取最后一帧
-    pub fn last_frame(&self) -> Option<&Molecule> {
+
+    pub fn last(&self) -> Option<&Frame> {
         self.frames.last()
     }
-    
-    /// 设置时间步长
-    pub fn set_timestep(&mut self, dt: f64) {
-        self.timestep = Some(dt);
-        if !self.frames.is_empty() {
-            self.total_time = Some(dt * (self.frames.len() - 1) as f64);
-        }
+
+    pub fn add_frame(&mut self, frame: Frame) {
+        self.frames.push(frame);
     }
-    
-    /// 获取指定帧的时间
-    pub fn get_time(&self, frame_index: usize) -> Option<f64> {
-        self.timestep.map(|dt| dt * frame_index as f64)
+
+    pub fn iter_frames(&self) -> impl Iterator<Item = &Frame> {
+        self.frames.iter()
+    }
+
+    // ── 时间 ─────────────────────────────────────────────────────────────────
+
+    /// 返回第 `index` 帧对应的时间（fs）；需要 `metadata.timestep` 不为 `None`。
+    pub fn time_at(&self, index: usize) -> Option<f64> {
+        self.metadata.timestep.map(|dt| dt * index as f64)
     }
 }
 
@@ -74,24 +92,46 @@ impl Default for Trajectory {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Atom;
+    use crate::atom::Atom;
     use nalgebra::Vector3;
-    
-    #[test]
-    fn test_trajectory_creation() {
-        let traj = Trajectory::new();
-        assert_eq!(traj.frame_count(), 0);
+
+    fn make_frame(x: f64) -> Frame {
+        let mut f = Frame::new();
+        f.add_atom(Atom::new("Fe", Vector3::new(x, 0.0, 0.0)));
+        f
     }
-    
+
+    #[test]
+    fn test_from_frame() {
+        let traj = Trajectory::from_frame(make_frame(0.0));
+        assert_eq!(traj.n_frames(), 1);
+        assert_eq!(traj.n_atoms(), Some(1));
+    }
+
     #[test]
     fn test_add_frames() {
         let mut traj = Trajectory::new();
-        let mut mol = Molecule::new();
-        mol.add_atom(Atom::new("C", Vector3::new(0.0, 0.0, 0.0)));
-        
-        traj.add_frame(mol.clone());
-        traj.add_frame(mol);
-        
-        assert_eq!(traj.frame_count(), 2);
+        traj.add_frame(make_frame(0.0));
+        traj.add_frame(make_frame(1.0));
+        assert_eq!(traj.n_frames(), 2);
+    }
+
+    #[test]
+    fn test_time_at() {
+        let mut traj = Trajectory::new();
+        traj.metadata.timestep = Some(2.0);
+        traj.add_frame(make_frame(0.0));
+        traj.add_frame(make_frame(1.0));
+        assert_eq!(traj.time_at(0), Some(0.0));
+        assert_eq!(traj.time_at(1), Some(2.0));
+    }
+
+    #[test]
+    fn test_first_last() {
+        let mut traj = Trajectory::new();
+        traj.add_frame(make_frame(0.0));
+        traj.add_frame(make_frame(5.0));
+        assert!((traj.first().unwrap().atom(0).position.x).abs() < 1e-10);
+        assert!((traj.last().unwrap().atom(0).position.x - 5.0).abs() < 1e-10);
     }
 }

@@ -1,6 +1,6 @@
 # Rust
 /target
-Cargo.lock
+# Cargo.lock
 **/*.rs.bk
 *.pdb
 
@@ -36,3 +36,7 @@ wheels/
 # OS
 .DS_Store
 Thumbs.db
+
+.env
+config/secrets.yml
+*.key
