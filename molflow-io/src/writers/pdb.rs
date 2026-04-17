@@ -1,51 +1,46 @@
-//! PDB 格式文件写入器
-
-use molflow_core::Molecule;
+use molflow_core::Trajectory;
 use std::fs::File;
-use std::io::{Write, BufWriter};
-use anyhow::{Result, Context};
+use std::io::{BufWriter, Write};
+use anyhow::{Context, Result};
 
-/// 将分子写入 PDB 格式文件
-/// 
-/// # 示例
-/// ```no_run
-/// use molflow_core::Molecule;
-/// use molflow_io::write_pdb;
-/// 
-/// let molecule = Molecule::new();
-/// write_pdb(&molecule, "output.pdb").unwrap();
-/// ```
-pub fn write_pdb(molecule: &Molecule, path: &str) -> Result<()> {
-    let file = File::create(path)
-        .context(format!("Failed to create file: {}", path))?;
+/// 将轨迹写入 PDB 文件。多帧使用 MODEL/ENDMDL 记录。
+pub fn write_pdb(trajectory: &Trajectory, path: &str) -> Result<()> {
+    let file = File::create(path).context(format!("cannot create {path}"))?;
     let mut writer = BufWriter::new(file);
-    
-    // HEADER 记录
-    if let Some(name) = &molecule.name {
-        writeln!(writer, "HEADER    {}", name)?;
+
+    if let Some(source) = &trajectory.metadata.source {
+        writeln!(writer, "HEADER    {source}")?;
     }
-    
-    // ATOM 记录
-    for (i, atom) in molecule.atoms.iter().enumerate() {
-        // PDB 格式: ATOM   serial atom resName chainID resSeq    x       y       z     occupancy tempFactor element
-        writeln!(
-            writer,
-            "{:<6}{:>5} {:^4} {:3} {:1}{:>4}    {:>8.3}{:>8.3}{:>8.3}{:>6.2}{:>6.2}          {:>2}",
-            "ATOM",
-            i + 1,                    // serial
-            atom.element,              // atom name
-            "UNK",                    // residue name
-            "A",                      // chain ID
-            1,                        // residue sequence
-            atom.position.x,
-            atom.position.y,
-            atom.position.z,
-            1.00,                     // occupancy
-            0.00,                     // temperature factor
-            atom.element              // element symbol
-        )?;
+
+    let multi = trajectory.n_frames() > 1;
+
+    for (model_idx, frame) in trajectory.frames.iter().enumerate() {
+        if multi {
+            writeln!(writer, "MODEL     {:>4}", model_idx + 1)?;
+        }
+        for (i, atom) in frame.atoms.iter().enumerate() {
+            writeln!(
+                writer,
+                "{:<6}{:>5} {:^4} {:3} {:1}{:>4}    {:>8.3}{:>8.3}{:>8.3}{:>6.2}{:>6.2}          {:>2}",
+                "ATOM",
+                i + 1,
+                atom.element,
+                "UNK",
+                "A",
+                1,
+                atom.position.x,
+                atom.position.y,
+                atom.position.z,
+                1.00,
+                0.00,
+                atom.element,
+            )?;
+        }
+        if multi {
+            writeln!(writer, "ENDMDL")?;
+        }
     }
-    
+
     writeln!(writer, "END")?;
     writer.flush()?;
     Ok(())
@@ -54,9 +49,29 @@ pub fn write_pdb(molecule: &Molecule, path: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+    use crate::readers::pdb::read_pdb;
+    use molflow_core::{Atom, Frame};
+    use nalgebra::Vector3;
+
+    fn make_traj() -> Trajectory {
+        let mut frame = Frame::new();
+        frame.add_atom(Atom::new("O", Vector3::new(0.0, 0.0, 0.119)));
+        frame.add_atom(Atom::new("H", Vector3::new(0.0, 0.763, -0.477)));
+        frame.add_atom(Atom::new("H", Vector3::new(0.0, -0.763, -0.477)));
+        let mut traj = Trajectory::from_frame(frame);
+        traj.metadata.source = Some("Water molecule".to_string());
+        traj
+    }
+
     #[test]
-    fn test_pdb_writing() {
-        // 实际测试需要使用临时文件
+    fn test_roundtrip() {
+        let path = std::env::temp_dir().join("roundtrip_water.pdb");
+        let path_str = path.to_str().unwrap();
+        let original = make_traj();
+        write_pdb(&original, path_str).unwrap();
+
+        let loaded = read_pdb(path_str).unwrap();
+        assert_eq!(loaded.n_frames(), 1);
+        assert_eq!(loaded.first().unwrap().n_atoms(), 3);
     }
 }

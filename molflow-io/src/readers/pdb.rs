@@ -1,80 +1,115 @@
-//! PDB (Protein Data Bank) 格式文件读取器
-//! 
-//! PDB 是生物大分子结构的标准格式
-
-use molflow_core::{Molecule, Atom};
+use molflow_core::{Atom, Frame, Trajectory};
 use nalgebra::Vector3;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 
-/// 读取 PDB 格式文件
-/// 
-/// # 文件格式示例
-/// ```text
-/// ATOM      1  O   HOH A   1       0.000   0.000   0.000  1.00  0.00           O
-/// ATOM      2  H1  HOH A   1       0.758   0.587   0.000  1.00  0.00           H
-/// ATOM      3  H2  HOH A   1      -0.758   0.587   0.000  1.00  0.00           H
-/// ```
-/// 
-/// # 示例
-/// ```no_run
-/// use molflow_io::read_pdb;
-/// 
-/// let molecule = read_pdb("protein.pdb").unwrap();
-/// println!("Loaded {} atoms", molecule.atom_count());
-/// ```
-pub fn read_pdb(path: &str) -> Result<Molecule> {
-    let file = File::open(path)
-        .context(format!("Failed to open file: {}", path))?;
+/// 读取 PDB 文件，支持多模型（MODEL/ENDMDL 记录）。
+pub fn read_pdb(path: &str) -> Result<Trajectory> {
+    let file = File::open(path).context(format!("cannot open {path}"))?;
     let reader = BufReader::new(file);
-    
-    let mut molecule = Molecule::new();
-    
+
+    let mut traj = Trajectory::new();
+    let mut current = Frame::new();
+    let mut has_model = false;
+
     for line in reader.lines() {
-        let line = line?;
-        
-        // 只处理 ATOM 和 HETATM 记录
-        if !line.starts_with("ATOM") && !line.starts_with("HETATM") {
-            continue;
+        let line = line.context("read error")?;
+        let tag = &line[..line.len().min(6)];
+
+        match tag {
+            "HEADER" => {
+                let source = line[line.len().min(10)..].trim();
+                if !source.is_empty() {
+                    traj.metadata.source = Some(source.to_string());
+                }
+            }
+            "MODEL " => {
+                has_model = true;
+            }
+            "ENDMDL" => {
+                traj.add_frame(std::mem::replace(&mut current, Frame::new()));
+            }
+            "ATOM  " | "HETATM" => {
+                if let Some(atom) = parse_atom_record(&line) {
+                    current.add_atom(atom);
+                }
+            }
+            _ => {}
         }
-        
-        // PDB 是固定宽度格式
-        if line.len() < 54 {
-            continue;
-        }
-        
-        // 提取元素符号 (列 77-78，如果存在)
-        let element = if line.len() >= 78 {
-            line[76..78].trim().to_string()
-        } else {
-            // 尝试从原子名称推断元素
-            line[12..16].trim().chars().next()
-                .map(|c| c.to_string())
-                .unwrap_or_else(|| "X".to_string())
-        };
-        
-        // 提取坐标 (列 31-54)
-        let x: f64 = line[30..38].trim().parse()
-            .context("Invalid x coordinate")?;
-        let y: f64 = line[38..46].trim().parse()
-            .context("Invalid y coordinate")?;
-        let z: f64 = line[46..54].trim().parse()
-            .context("Invalid z coordinate")?;
-        
-        let position = Vector3::new(x, y, z);
-        molecule.add_atom(Atom::new(element, position));
     }
-    
-    Ok(molecule)
+
+    // 没有 MODEL 记录时，视为单帧
+    if !has_model && current.n_atoms() > 0 {
+        traj.add_frame(current);
+    }
+
+    Ok(traj)
+}
+
+fn parse_atom_record(line: &str) -> Option<Atom> {
+    if line.len() < 54 {
+        return None;
+    }
+    let element = if line.len() >= 78 {
+        line[76..78].trim().to_string()
+    } else {
+        // 从原子名称字段推断（取第一个非空字符）
+        line[12..16]
+            .trim()
+            .chars()
+            .next()
+            .map(|c| c.to_string())
+            .unwrap_or_else(|| "X".to_string())
+    };
+    let x: f64 = line[30..38].trim().parse().ok()?;
+    let y: f64 = line[38..46].trim().parse().ok()?;
+    let z: f64 = line[46..54].trim().parse().ok()?;
+    Some(Atom::new(element, Vector3::new(x, y, z)))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
+    const WATER_PDB: &str = "\
+HEADER    Water molecule
+ATOM      1  O   UNK A   1       0.000   0.000   0.119  1.00  0.00           O
+ATOM      2  H   UNK A   1       0.000   0.763  -0.477  1.00  0.00           H
+ATOM      3  H   UNK A   1       0.000  -0.763  -0.477  1.00  0.00           H
+END
+";
+
+    const MULTI_PDB: &str = "\
+MODEL        1
+ATOM      1  C   UNK A   1       0.000   0.000   0.000  1.00  0.00           C
+ENDMDL
+MODEL        2
+ATOM      1  C   UNK A   1       1.400   0.000   0.000  1.00  0.00           C
+ENDMDL
+";
+
+    fn write_tmp(name: &str, content: &str) -> std::path::PathBuf {
+        let path = std::env::temp_dir().join(name);
+        std::fs::write(&path, content).unwrap();
+        path
+    }
+
     #[test]
-    fn test_pdb_parsing() {
-        // 实际测试需要创建测试文件
+    fn test_single_frame() {
+        let path = write_tmp("test_water.pdb", WATER_PDB);
+        let traj = read_pdb(path.to_str().unwrap()).unwrap();
+        assert_eq!(traj.n_frames(), 1);
+        let frame = traj.first().unwrap();
+        assert_eq!(frame.n_atoms(), 3);
+        assert_eq!(frame.atom(0).element, "O");
+        assert_eq!(traj.metadata.source.as_deref(), Some("Water molecule"));
+    }
+
+    #[test]
+    fn test_multi_model() {
+        let path = write_tmp("test_multi.pdb", MULTI_PDB);
+        let traj = read_pdb(path.to_str().unwrap()).unwrap();
+        assert_eq!(traj.n_frames(), 2);
     }
 }
