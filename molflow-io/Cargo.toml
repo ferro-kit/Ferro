@@ -6,5 +6,6 @@ edition.workspace = true
 [dependencies]
 molflow-core = { path = "../molflow-core" }
 nalgebra = { workspace = true, features = ["serde-serialize"] }
+ndarray.workspace = true
 thiserror.workspace = true
 anyhow.workspace = true

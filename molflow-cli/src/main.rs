@@ -122,11 +122,13 @@ fn create_job(input: &str, software: &str, method: Option<&str>, output: Option<
     use molflow_io::read_xyz;
     use molflow_workflow::GaussianJobBuilder;
     
-    let mol = read_xyz(input)?;
-    
+    let traj = read_xyz(input)?;
+    let frame = traj.frames.into_iter().next()
+        .ok_or_else(|| anyhow::anyhow!("文件中没有帧"))?;
+
     match software {
         "gaussian" => {
-            let mut builder = GaussianJobBuilder::new(mol);
+            let mut builder = GaussianJobBuilder::new(frame);
             if let Some(m) = method {
                 builder.method = m.to_string();
             }
@@ -147,13 +149,12 @@ fn create_job(input: &str, software: &str, method: Option<&str>, output: Option<
 fn show_info(input: &str) -> Result<()> {
     use molflow_io::read_xyz;
     
-    let mol = read_xyz(input)?;
+    let traj = read_xyz(input)?;
+    let frame = traj.frames.first()
+        .ok_or_else(|| anyhow::anyhow!("文件中没有帧"))?;
     println!("分子信息:");
-    println!("  原子数: {}", mol.atom_count());
-    println!("  总质量: {:.2} amu", mol.total_mass());
-    
-    let com = mol.center_of_mass();
-    println!("  质心: ({:.3}, {:.3}, {:.3})", com.x, com.y, com.z);
+    println!("  帧数:   {}", traj.frames.len());
+    println!("  原子数: {}", frame.atoms.len());
     
     Ok(())
 }

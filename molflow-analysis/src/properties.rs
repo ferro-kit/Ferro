@@ -1,19 +1,14 @@
-//! 分子性质计算模块
-//! 
-//! 用于计算各种分子性质，如偶极矩、极化率、振动频率等
+//! 分子性质计算（占位实现）
 
-use molflow_core::Molecule;
+use molflow_core::Frame;
 
-/// 计算分子的偶极矩 (示例函数)
-pub fn dipole_moment(_mol: &Molecule) -> f64 {
-    // TODO: 实现偶极矩计算
-    // 这里需要原子电荷信息
+/// 偶极矩（需要原子电荷；目前返回 0）
+pub fn dipole_moment(_frame: &Frame) -> f64 {
+    // TODO: Σ q_i * r_i
     0.0
 }
 
-/// 计算分子的总能量 (示例函数)
-pub fn total_energy(_mol: &Molecule) -> f64 {
-    // TODO: 实现能量计算
-    // 可以从量子化学计算结果中读取
-    0.0
+/// 体系总能量（从 frame.energy 读取）
+pub fn total_energy(frame: &Frame) -> Option<f64> {
+    frame.energy
 }

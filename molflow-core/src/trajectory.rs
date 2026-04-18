@@ -71,6 +71,18 @@ impl Trajectory {
         self.frames.push(frame);
     }
 
+    /// Return a new trajectory containing only the last `n` frames.
+    ///
+    /// If `n` ≥ the trajectory length, all frames are returned (no panic).
+    /// Metadata is preserved unchanged.
+    pub fn tail(&self, n: usize) -> Trajectory {
+        let start = self.n_frames().saturating_sub(n);
+        Trajectory {
+            frames: self.frames[start..].to_vec(),
+            metadata: self.metadata.clone(),
+        }
+    }
+
     pub fn iter_frames(&self) -> impl Iterator<Item = &Frame> {
         self.frames.iter()
     }

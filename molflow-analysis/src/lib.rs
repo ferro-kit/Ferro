@@ -1,19 +1,11 @@
-//! ChemTools Analysis - 后处理分析模块
-//! 
-//! 提供轨迹分析、几何计算、性质计算等功能
+//! molflow-analysis — 后处理分析模块
 
 pub mod geometry;
 pub mod trajectory_analysis;
 pub mod properties;
+pub mod md;
 
 pub use geometry::*;
 pub use trajectory_analysis::*;
 pub use properties::*;
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn test_analysis_module() {
-        assert!(true);
-    }
-}
+pub use md::{GrParams, GrResult, PairStats, calc_gr, SqParams, SqResult, calc_sq_from_gr};
