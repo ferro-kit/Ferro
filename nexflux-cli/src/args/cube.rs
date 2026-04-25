@@ -6,6 +6,7 @@ pub enum CubeCliMode {
     Density,
     Velocity,
     Force,
+    Radius,
     Sdf,
 }
 
@@ -15,7 +16,9 @@ impl From<CubeCliMode> for CubeMode {
             CubeCliMode::Density  => CubeMode::Density,
             CubeCliMode::Velocity => CubeMode::Velocity,
             CubeCliMode::Force    => CubeMode::Force,
-            CubeCliMode::Sdf      => CubeMode::Density, // unreachable; sdf takes a separate path
+            // 以下两个走独立执行路径，不经此转换
+            CubeCliMode::Radius   => CubeMode::Density,
+            CubeCliMode::Sdf      => CubeMode::Density,
         }
     }
 }

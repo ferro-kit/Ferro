@@ -21,5 +21,6 @@ pub use md::{
     VacfParams, VacfResult, calc_vacf, write_vacf,
     RotCorrParams, RotCorrResult, calc_rotcorr, write_rotcorr,
     CubeMode, CubeDensityParams, CubeDensityResult, calc_cube_density,
+    CubeRadiusParams, CubeRadiusResult, calc_cube_radius,
     ClusterSdfParams, ClusterFamily, RmsdStats, ClusterSdfResult, calc_cluster_sdf,
 };

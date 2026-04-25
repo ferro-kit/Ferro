@@ -22,6 +22,7 @@ pub fn print_cube_help(mode: &CubeCliMode) {
         CubeCliMode::Density  => print_cube_density(),
         CubeCliMode::Velocity => print_cube_velocity(),
         CubeCliMode::Force    => print_cube_force(),
+        CubeCliMode::Radius   => print_cube_radius(),
         CubeCliMode::Sdf      => print_cube_sdf(),
     }
 }
@@ -238,6 +239,32 @@ Parameters:
 
 Example:
   mol-cube -m force -i traj.dump --elements O"#
+    );
+}
+
+fn print_cube_radius() {
+    println!(
+        r#"nex-cube -m radius — Hard-Sphere Spatial Occupancy Map
+  For each voxel, counts how many (frame, atom) pairs have the selected
+  atom within --radius Å of the voxel centre.  Applies the minimum-image
+  convention for periodic cells.  Output is a Gaussian cube file.
+
+  Unlike -m density (Gaussian broadening / bin-count), this mode uses a
+  hard binary criterion: voxel is marked if any atom overlaps it.
+
+Parameters:
+  --nx      INT       Grid points along a axis    default: 50
+  --ny      INT       Grid points along b axis    default: 50
+  --nz      INT       Grid points along c axis    default: 50
+  --radius  FLOAT     Hard-sphere cutoff [Å]      default: 0.7
+  --elements Fe,O     Include only these elements default: all
+  --last-n  INT       Use only the last N frames
+  --ncore   INT       Parallel threads
+  -o PATH             Output cube file            default: radius.cube
+
+Example:
+  nex-cube -m radius -i traj.dump --elements Li --radius 0.7
+  nex-cube -m radius -i traj.dump --elements Li --radius 1.0 --nx 100 --ny 100 --nz 100"#
     );
 }
 

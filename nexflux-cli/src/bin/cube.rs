@@ -7,6 +7,7 @@ use nexflux::{
 };
 use nexflux_analysis::{
     calc_cube_density, CubeDensityParams,
+    calc_cube_radius, CubeRadiusParams,
     calc_cluster_sdf, ClusterSdfParams,
 };
 use nexflux_io::{write_cube, LammpsUnits};
@@ -42,23 +43,27 @@ struct Cli {
     #[arg(long)]
     metal_units: bool,
 
-    // ── density / velocity / force mode ──────────────────────────────────────
+    // ── density / velocity / force / radius mode ─────────────────────────────
 
-    /// Grid points along a axis  [density/velocity/force]
+    /// Grid points along a axis  [density/velocity/force/radius]
     #[arg(long, default_value = "50")]
     nx: usize,
 
-    /// Grid points along b axis  [density/velocity/force]
+    /// Grid points along b axis  [density/velocity/force/radius]
     #[arg(long, default_value = "50")]
     ny: usize,
 
-    /// Grid points along c axis  [density/velocity/force]
+    /// Grid points along c axis  [density/velocity/force/radius]
     #[arg(long, default_value = "50")]
     nz: usize,
 
-    /// Only include these elements, e.g. Fe,O  [density/velocity/force]
+    /// Only include these elements, e.g. Fe,O  [density/velocity/force/radius]
     #[arg(long, value_delimiter = ',')]
     elements: Option<Vec<String>>,
+
+    /// Hard-sphere radius cutoff [Å]  [radius]
+    #[arg(long, default_value = "0.7")]
+    radius: f64,
 
     // ── sdf mode ─────────────────────────────────────────────────────────────
 
@@ -125,8 +130,9 @@ fn main() -> Result<()> {
     }
 
     match args.mode {
-        CubeCliMode::Sdf => run_sdf(&args, &traj),
-        ref m => run_density(m, &args, &traj),
+        CubeCliMode::Sdf    => run_sdf(&args, &traj),
+        CubeCliMode::Radius => run_radius(&args, &traj),
+        ref m               => run_density(m, &args, &traj),
     }
 }
 
@@ -149,6 +155,31 @@ fn run_density(mode: &CubeCliMode, args: &Cli, traj: &nexflux_core::Trajectory) 
     println!(
         "Cube ({}) -> {}  [{} frames, {} atoms]",
         mode_name(mode),
+        out.display(),
+        result.n_frames,
+        result.n_atoms,
+    );
+    Ok(())
+}
+
+fn run_radius(args: &Cli, traj: &nexflux_core::Trajectory) -> Result<()> {
+    let out = args.output.as_deref().unwrap_or(std::path::Path::new("radius.cube"));
+
+    let params = CubeRadiusParams {
+        nx: args.nx,
+        ny: args.ny,
+        nz: args.nz,
+        radius: args.radius,
+        elements: args.elements.clone(),
+    };
+
+    let result = calc_cube_radius(traj, &params)
+        .ok_or_else(|| anyhow!("Cube radius calc failed (missing cell?)"))?;
+
+    write_cube(out.to_str().unwrap_or("radius.cube"), &result.cube)?;
+    println!(
+        "Cube (radius={:.3}Å) -> {}  [{} frames, {} atoms]",
+        params.radius,
         out.display(),
         result.n_frames,
         result.n_atoms,
@@ -228,6 +259,7 @@ fn mode_name(m: &CubeCliMode) -> &'static str {
         CubeCliMode::Density  => "density",
         CubeCliMode::Velocity => "velocity",
         CubeCliMode::Force    => "force",
+        CubeCliMode::Radius   => "radius",
         CubeCliMode::Sdf      => "sdf",
     }
 }

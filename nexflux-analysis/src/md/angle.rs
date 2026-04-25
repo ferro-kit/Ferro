@@ -13,6 +13,7 @@
 //! 并行策略：以帧为粒度 par_iter().fold().reduce()，同 gr.rs。
 //! 算法参考：code1/angle.c (EstimateAngle)。
 
+use nalgebra::{Matrix3, Vector3};
 use rayon::prelude::*;
 use std::collections::BTreeMap;
 use std::io::{BufWriter, Write};
@@ -52,6 +53,95 @@ fn sort_triplet_keys(map: &BTreeMap<String, Vec<u64>>) -> Vec<String> {
         parse(ka).cmp(&parse(kb))
     });
     keys
+}
+
+// ─── linked-cell list ────────────────────────────────────────────────────────
+
+struct CellList {
+    nx: usize,
+    ny: usize,
+    nz: usize,
+    /// cells[ix + iy*nx + iz*nx*ny] = atom indices in that cell
+    cells: Vec<Vec<usize>>,
+    /// 各原子分数坐标（各分量 ∈ [0, 1)）
+    frac: Vec<[f64; 3]>,
+    /// cell.matrix.transpose()，用于分数差 → 笛卡尔向量
+    mat_t: Matrix3<f64>,
+}
+
+impl CellList {
+    fn build(frame: &nexflux_core::Frame, cell: &nexflux_core::Cell, max_rcut: f64) -> Self {
+        let mat_t = cell.matrix.transpose();
+        // (mat_t)^{-1} 的第 i 行是倒格矢 i，其模 = 1/d_i（面间距）
+        // 每轴 cell 数 = floor(d_i / max_rcut).max(1)，对三斜晶胞完全正确
+        let mat_t_inv = mat_t.try_inverse().unwrap_or(mat_t);
+        let nx = ((1.0 / (max_rcut * mat_t_inv.row(0).norm())).floor() as usize).max(1);
+        let ny = ((1.0 / (max_rcut * mat_t_inv.row(1).norm())).floor() as usize).max(1);
+        let nz = ((1.0 / (max_rcut * mat_t_inv.row(2).norm())).floor() as usize).max(1);
+
+        let mut cells = vec![Vec::new(); nx * ny * nz];
+
+        let frac: Vec<[f64; 3]> = frame.atoms.iter().enumerate().map(|(i, a)| {
+            let f = mat_t_inv * a.position;
+            let fx = f.x.rem_euclid(1.0);
+            let fy = f.y.rem_euclid(1.0);
+            let fz = f.z.rem_euclid(1.0);
+            let ix = ((fx * nx as f64) as usize).min(nx - 1);
+            let iy = ((fy * ny as f64) as usize).min(ny - 1);
+            let iz = ((fz * nz as f64) as usize).min(nz - 1);
+            cells[ix + iy * nx + iz * nx * ny].push(i);
+            [fx, fy, fz]
+        }).collect();
+
+        CellList { nx, ny, nz, cells, frac, mat_t }
+    }
+
+    /// 返回 b_idx 在 max_rcut 内的所有邻居：(atom_idx, dist, [dx, dy, dz] Å)
+    fn neighbors_of(&self, b_idx: usize, max_rcut: f64) -> Vec<(usize, f64, [f64; 3])> {
+        let fb = self.frac[b_idx];
+        let radius2 = max_rcut * max_rcut;
+
+        let cx = (fb[0] * self.nx as f64) as i64;
+        let cy = (fb[1] * self.ny as f64) as i64;
+        let cz = (fb[2] * self.nz as f64) as i64;
+
+        let mut result = Vec::new();
+        // 最多 27 个相邻 cell；盒子过小时同一 cell 会被多次映射，用线性扫描去重
+        let mut seen: Vec<usize> = Vec::with_capacity(27);
+
+        for dz in -1i64..=1 {
+            for dy in -1i64..=1 {
+                for dx in -1i64..=1 {
+                    let ix = ((cx + dx).rem_euclid(self.nx as i64)) as usize;
+                    let iy = ((cy + dy).rem_euclid(self.ny as i64)) as usize;
+                    let iz = ((cz + dz).rem_euclid(self.nz as i64)) as usize;
+                    let flat = ix + iy * self.nx + iz * self.nx * self.ny;
+                    if seen.contains(&flat) { continue; }
+                    seen.push(flat);
+
+                    for &other in &self.cells[flat] {
+                        if other == b_idx { continue; }
+                        let fo = self.frac[other];
+                        let mut df = Vector3::new(
+                            fo[0] - fb[0],
+                            fo[1] - fb[1],
+                            fo[2] - fb[2],
+                        );
+                        // 分数空间最小镜像，等价于 cell.minimum_image 但省去矩阵求逆
+                        df.x -= df.x.round();
+                        df.y -= df.y.round();
+                        df.z -= df.z.round();
+                        let cart = self.mat_t * df;
+                        let dist2 = cart.norm_squared();
+                        if dist2 > 0.0 && dist2 < radius2 {
+                            result.push((other, dist2.sqrt(), [cart.x, cart.y, cart.z]));
+                        }
+                    }
+                }
+            }
+        }
+        result
+    }
 }
 
 // ─── 参数 ────────────────────────────────────────────────────────────────────
@@ -147,21 +237,14 @@ pub fn calc_angle(traj: &Trajectory, params: &AngleParams) -> Option<AngleResult
             let cell = frame.cell.as_ref().unwrap();
             let n = frame.atoms.len();
 
+            // 每帧构建 linked-cell list，将邻居搜索从 O(N²) 降至 O(N)
+            let cl = CellList::build(frame, cell, max_rcut);
+
             for b_idx in 0..n {
                 let b_elem = frame.atoms[b_idx].element.as_str();
 
-                // 找 B 原子在 max_rcut 内的所有邻居（保存下标、距离、从 B 出发的向量）
-                let mut neighbors: Vec<(usize, f64, [f64; 3])> = Vec::new();
-                for other in 0..n {
-                    if other == b_idx { continue; }
-                    let diff = cell.minimum_image(
-                        frame.atoms[other].position - frame.atoms[b_idx].position,
-                    );
-                    let dist = diff.norm();
-                    if dist > 0.0 && dist < max_rcut {
-                        neighbors.push((other, dist, [diff.x, diff.y, diff.z]));
-                    }
-                }
+                // 只搜索 27 个相邻 cell，平均 ~30 个原子而非全部 N 个
+                let neighbors = cl.neighbors_of(b_idx, max_rcut);
 
                 // 枚举所有无序邻居对 (ai, ci)，ai < ci，避免重复计数
                 let nn = neighbors.len();
