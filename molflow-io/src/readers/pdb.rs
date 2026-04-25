@@ -1,4 +1,4 @@
-use molflow_core::{Atom, Frame, Trajectory};
+use molflow_core::{Atom, Cell, Frame, Trajectory};
 use nalgebra::Vector3;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
@@ -12,6 +12,7 @@ pub fn read_pdb(path: &str) -> Result<Trajectory> {
     let mut traj = Trajectory::new();
     let mut current = Frame::new();
     let mut has_model = false;
+    let mut cell: Option<Cell> = None;
 
     for line in reader.lines() {
         let line = line.context("read error")?;
@@ -24,11 +25,19 @@ pub fn read_pdb(path: &str) -> Result<Trajectory> {
                     traj.metadata.source = Some(source.to_string());
                 }
             }
+            "CRYST1" => {
+                cell = parse_cryst1(&line);
+            }
             "MODEL " => {
                 has_model = true;
             }
             "ENDMDL" => {
-                traj.add_frame(std::mem::replace(&mut current, Frame::new()));
+                let mut frame = std::mem::replace(&mut current, Frame::new());
+                if let Some(c) = &cell {
+                    frame.cell = Some(c.clone());
+                    frame.pbc = [true; 3];
+                }
+                traj.add_frame(frame);
             }
             "ATOM  " | "HETATM" => {
                 if let Some(atom) = parse_atom_record(&line) {
@@ -41,10 +50,26 @@ pub fn read_pdb(path: &str) -> Result<Trajectory> {
 
     // 没有 MODEL 记录时，视为单帧
     if !has_model && current.n_atoms() > 0 {
+        if let Some(c) = cell {
+            current.cell = Some(c);
+            current.pbc = [true; 3];
+        }
         traj.add_frame(current);
     }
 
     Ok(traj)
+}
+
+/// CRYST1 format: CRYST1  a  b  c  α  β  γ  sgroup  z
+fn parse_cryst1(line: &str) -> Option<Cell> {
+    if line.len() < 54 { return None; }
+    let a:  f64 = line[6..15].trim().parse().ok()?;
+    let b:  f64 = line[15..24].trim().parse().ok()?;
+    let c:  f64 = line[24..33].trim().parse().ok()?;
+    let al: f64 = line[33..40].trim().parse().ok()?;
+    let be: f64 = line[40..47].trim().parse().ok()?;
+    let ga: f64 = line[47..54].trim().parse().ok()?;
+    Cell::from_lengths_angles(a, b, c, al, be, ga).ok()
 }
 
 fn parse_atom_record(line: &str) -> Option<Atom> {

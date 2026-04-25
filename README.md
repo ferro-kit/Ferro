@@ -1,221 +1,165 @@
-# ChemTools - 计算化学工具集
+# molflow
 
-一个用 Rust 编写的模块化计算化学工具包，支持分子结构处理、轨迹分析和计算任务创建。
+用 Rust 编写的模块化计算化学工具包，主要面向**周期性体系**（晶体、表面、玻璃）。
 
 ## 项目结构
 
 ```
 molflow/
-├── molflow-core/          # 核心数据结构
-├── molflow-io/            # 文件读写
-├── molflow-analysis/      # 后处理分析
-├── molflow-workflow/      # 任务创建
-├── molflow-cli/           # 命令行工具
-└── molflow-python/        # Python 绑定
+├── molflow-core/       # 核心数据结构（Atom, Frame, Trajectory, Cell）
+├── molflow-io/         # 文件读写（10 种格式）
+├── molflow-analysis/   # 后处理分析（MD 分析、玻璃网络结构分析）
+├── molflow-workflow/   # 计算输入文件生成（Gaussian 等）
+├── molflow-cli/        # 命令行工具集
+└── molflow-python/     # Python 绑定（PyO3，暂未启用）
 ```
 
-## 模块说明
-
-### 1. molflow-core - 核心模块
-**作用**: 定义基础数据结构
-- `Atom`: 原子结构（位置、元素、质量、电荷等）
-- `Molecule`: 分子结构（原子列表、键连接）
-- `Trajectory`: 分子动力学轨迹（多帧分子结构）
-- `units`: 单位转换工具（长度、能量、温度）
-- `error`: 统一错误处理
-
-**使用场景**: 所有其他模块的基础，提供统一的数据表示
-
-### 2. molflow-io - 文件读写模块
-**作用**: 支持多种文件格式的读取和写入
-- **读取器**: XYZ, PDB, GRO（可扩展）
-- **写入器**: XYZ, PDB, GRO（可扩展）
-
-**使用场景**: 
-- 读取实验或计算得到的结构文件
-- 导出结果供其他软件使用
-- 格式转换
-
-### 3. molflow-analysis - 分析模块
-**作用**: 提供后处理分析功能
-- **几何分析**: 键长、键角、二面角、回转半径
-- **轨迹分析**: RMSD, MSD, 质心轨迹
-- **性质计算**: 偶极矩、能量等
-
-**使用场景**:
-- 分析分子动力学轨迹
-- 提取几何参数
-- 计算分子性质
-
-### 4. molflow-workflow - 任务创建模块
-**作用**: 生成各种量子化学软件的输入文件
-- **支持软件**: Gaussian, ORCA, GROMACS（可扩展）
-- **任务类型**: 几何优化、单点能、频率计算、MD模拟
-- **模板管理**: 常用计算任务模板
-
-**使用场景**:
-- 批量生成计算任务
-- 标准化工作流程
-- 快速构建输入文件
-
-### 5. molflow-cli - 命令行工具
-**作用**: 提供便捷的命令行接口
-- 文件格式转换
-- 快速分析
-- 任务创建
-- 信息查看
-
-**使用场景**: 
-- 日常快速操作
-- Shell 脚本集成
-- 自动化工作流
-
-### 6. molflow-python - Python 绑定
-**作用**: 在 Python 中使用 Rust 核心功能
-- 高性能计算核心
-- Python 易用接口
-- 与其他 Python 库集成
-
-**使用场景**:
-- Jupyter Notebook 交互分析
-- 与 NumPy/Pandas 集成
-- Python 脚本自动化
-
-## 快速开始
-
-### 安装 Rust (如果还没有)
-```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+依赖层次（严格单向，中间层不得互相依赖）：
+```
+molflow-cli / molflow-python
+    ├── molflow-core
+    ├── molflow-io        → core
+    ├── molflow-analysis  → core
+    └── molflow-workflow  → core
 ```
 
-### 编译项目
+## 安装与编译
+
 ```bash
-cd molflow
 cargo build --release
 ```
 
-### 使用命令行工具
+编译产物在 `target/release/`，包含以下可执行文件：
+`mol-convert`、`mol-info`、`mol-job`、`mol-traj`、`mol-corr`、`mol-cube`、`mol-network`
+
+## 支持的文件格式
+
+| 格式 | 读 | 写 |
+|---|:---:|:---:|
+| XYZ | ✓ | ✓ |
+| Extended XYZ | ✓ | ✓ |
+| PDB | ✓ | ✓ |
+| CIF | ✓ | ✓ |
+| POSCAR / CONTCAR | ✓ | ✓ |
+| LAMMPS data | ✓ | ✓ |
+| LAMMPS dump | ✓ | ✓ |
+| CP2K .inp | ✓ | — |
+| CP2K .restart | ✓ | — |
+| Quantum ESPRESSO .in | ✓ | ✓ |
+| Gaussian cube | — | ✓ |
+
+## 命令行工具
+
+### mol-convert — 格式转换
 ```bash
-# 文件格式转换
-cargo run --bin molflow -- convert -i input.xyz -o output.pdb
-
-# 显示分子信息
-cargo run --bin molflow -- info -i molecule.xyz
-
-# 创建 Gaussian 任务
-cargo run --bin molflow -- job -i input.xyz -s gaussian -m B3LYP -o job.gjf
+mol-convert -i structure.xyz -o structure.pdb
+mol-convert -i traj.dump -o traj.extxyz
 ```
 
-### 作为 Rust 库使用
-```rust
-use molflow_core::{Molecule, Atom};
-use molflow_io::{read_xyz, write_pdb};
-use nalgebra::Vector3;
+### mol-info — 结构信息
+```bash
+mol-info -i water.xyz
+mol-info -i NaCl.cif
+```
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 读取文件
-    let mol = read_xyz("input.xyz")?;
-    
-    // 计算质心
-    let com = mol.center_of_mass();
-    println!("质心: {:?}", com);
-    
-    // 导出为 PDB
-    write_pdb(&mol, "output.pdb")?;
-    
-    Ok(())
+### mol-job — 生成计算输入文件
+```bash
+mol-job -i water.xyz -s gaussian -m B3LYP -b "6-31G*" -o job.gjf
+```
+
+### mol-traj — 轨迹结构分析
+```bash
+mol-traj -m gr    -i traj.dump                          # 径向分布函数 g(r)
+mol-traj -m sq    -i traj.dump --weighting both         # 结构因子 S(q)
+mol-traj -m msd   -i traj.dump --dt 2.0 --elements Li   # 均方位移
+mol-traj -m angle -i traj.dump --r-cut-ab 2.0           # 键角分布
+mol-traj -m gr                                          # 无 -i → 显示详细帮助
+```
+
+### mol-corr — 相关函数
+```bash
+mol-corr -m vacf    -i traj.dump --dt 2.0              # 速度自相关函数
+mol-corr -m rotcorr -i traj.xyz --center O --neighbor H # 转动相关函数
+mol-corr -m vanhove -i traj.dump --tau 100              # Van Hove 自相关函数
+```
+
+### mol-cube — 空间密度分布
+```bash
+mol-cube -m density  -i traj.dump                      # 数密度 (原子/Å³)
+mol-cube -m velocity -i traj.dump                      # 速度场
+mol-cube -m force    -i traj.dump --elements O         # 力场
+```
+输出为 Gaussian cube 格式，可直接用 VESTA / VMD 可视化。
+
+### mol-network — 玻璃网络结构分析
+针对周期性体系（玻璃、晶体），分析网络形成体 (former) 与配体之间的连接拓扑。
+
+```bash
+# P-O 体系（截断半径 2.3 Å）
+mol-network -i traj.dump --P-O=2.3
+
+# 多元素体系，输出 xlsx
+mol-network -i traj.dump --P-O=2.3 --Si-O=1.8 --Al-O=2.0 --format xlsx -o result
+
+# 参数格式：--Former-Ligand=cutoff_in_Angstrom
+# Former 首字母大写（与 clap 普通参数区分）
+```
+
+输出内容：
+- **CN 分布**：每种 (former, ligand) 对的配位数分布 + 平均值
+- **配体分类**：每个配体原子的类型（FO / NBO(X) / BO(X-Y) / OBO(X-Y-Z)）
+- **Qn 物种**：Q^n(mX) 分布（n = 桥接配体数，m = 异元素桥接数）
+
+CSV 输出三个文件（`_cn.csv`、`_ligand.csv`、`_qn.csv`）；xlsx 输出三个 Sheet。
+
+## 内部单位
+
+| 物理量 | 单位 |
+|---|---|
+| 长度 | Å |
+| 能量 | eV |
+| 力 | eV/Å |
+| 应力 | eV/Å³ |
+| 时间 | fs |
+| 质量 | amu |
+
+## 核心数据类型
+
+```rust
+// 始终以 Trajectory 作为顶层类型，单帧文件也是 Trajectory { frames: vec![frame] }
+pub struct Trajectory { pub frames: Vec<Frame>, pub metadata: TrajectoryMetadata }
+
+pub struct Frame {
+    pub atoms: Vec<Atom>,
+    pub cell: Option<Cell>,           // None = 非周期性
+    pub pbc: [bool; 3],               // 各轴是否启用 PBC
+    pub energy: Option<f64>,
+    pub forces: Option<Vec<Vector3<f64>>>,
+    pub velocities: Option<Vec<Vector3<f64>>>,
+    // ...
+}
+
+pub struct Atom {
+    pub element: String,
+    pub position: Vector3<f64>,       // Å，直角坐标
+    pub label: Option<String>,
+    pub mass: Option<f64>,
+    pub magmom: Option<f64>,
+    pub charge: Option<f64>,
 }
 ```
 
-### Python 使用 (可选，需要先安装 maturin)
-
-⚠️ **新手建议**: 先跳过 Python 部分，专注于 Rust 核心功能。
-
-详细说明请看 `PYTHON_BINDING.md`
+## 常用开发命令
 
 ```bash
-cd molflow-python
-pip install maturin
-maturin develop
+cargo build                          # 编译工作区
+cargo build --release                # 发布版
+cargo test                           # 全部测试（当前 146 个）
+cargo test --package molflow-io      # 单个 crate 测试
+cargo fmt && cargo clippy            # 格式化 + 静态检查
+cargo run --bin mol-info -- -i examples/water.xyz
 ```
 
-```python
-import molflow
+## 测试文件
 
-# 读取文件
-info = molflow.read_xyz("molecule.xyz")
-print(info)
-
-# 计算质心
-com = molflow.center_of_mass("molecule.xyz")
-print(f"质心: {com}")
-```
-
-## 扩展指南
-
-### 添加新的文件格式
-1. 在 `molflow-io/src/readers/` 添加新的读取器
-2. 在 `molflow-io/src/writers/` 添加新的写入器
-3. 在 `mod.rs` 中导出
-
-### 添加新的分析功能
-1. 在 `molflow-analysis/src/` 添加新模块
-2. 实现分析函数
-3. 在 CLI 和 Python 绑定中添加接口
-
-### 添加新的计算软件支持
-1. 在 `molflow-workflow/src/job_builder.rs` 添加新的构建器
-2. 在 `templates.rs` 添加模板
-3. 在 CLI 中添加命令
-
-## 设计优势
-
-### 为什么选择 Workspace 结构？
-1. **模块化**: 每个功能独立开发、测试
-2. **可复用**: 其他项目可以只依赖需要的模块
-3. **清晰职责**: core → io → analysis → workflow 层次分明
-4. **易维护**: 修改一个模块不影响其他模块
-5. **并行开发**: 团队可以同时开发不同模块
-
-### 为什么使用 Rust？
-1. **性能**: 接近 C/C++ 的性能
-2. **安全**: 编译时内存安全保证
-3. **Cargo**: 无需学习 Make/CMake
-4. **生态**: 丰富的科学计算库
-5. **Python 互操作**: 通过 PyO3 轻松集成
-
-## 开发路线图
-
-- [x] 基础框架搭建
-- [ ] 完善文件格式支持 (MOL2, SDF, LAMMPS 等)
-- [ ] 实现完整的轨迹分析功能
-- [ ] 支持更多量子化学软件 (ORCA, Q-Chem, CP2K 等)
-- [ ] 添加周期性边界条件支持
-- [ ] 实现力场参数处理
-- [ ] 添加可视化功能
-- [ ] 性能优化和并行化
-
-## 依赖说明
-
-- `nalgebra`: 线性代数（向量、矩阵）
-- `ndarray`: 多维数组
-- `rayon`: 并行计算
-- `serde`: 序列化/反序列化
-- `thiserror`: 错误处理
-- `anyhow`: 错误传播
-- `clap`: 命令行参数解析
-- `pyo3`: Python 绑定
-
-## 许可证
-
-MIT License
-
-## 贡献指南
-
-欢迎提交 Issue 和 Pull Request！
-
-对于新手：
-1. 从简单的功能开始（如添加新的文件格式）
-2. 保持代码简洁、注释清晰
-3. 添加单元测试
-4. 更新文档
+`tests/`（water.xyz, water.pdb, water.cif）、`examples/`（LAMMPS dump、CIF、LMP data、CP2K inp）

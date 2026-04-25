@@ -1,214 +1,144 @@
-# ChemTools 快速入门指南
+# molflow 快速入门
 
-## 新手学习路线
+## 编译
 
-### 第一步：理解项目结构
-```
-molflow/
-├── molflow-core/      ← 从这里开始！定义了 Atom, Molecule, Trajectory
-├── molflow-io/        ← 文件读写：read_xyz(), write_pdb()
-├── molflow-analysis/  ← 分析功能：计算距离、RMSD 等
-├── molflow-workflow/  ← 生成输入文件：Gaussian, GROMACS
-├── molflow-cli/       ← 命令行工具：你将主要使用这个
-└── molflow-python/    ← Python 绑定：方便与 Python 集成
-```
-
-### 第二步：编译项目
 ```bash
-# 在 molflow 根目录
+cd molflow
 cargo build --release
-
-# 如果成功，你会看到编译输出
-# 可执行文件在: target/release/molflow
+# 可执行文件在 target/release/mol-*
 ```
 
-### 第三步：运行第一个命令
+或直接用 `cargo run --bin <name> -- <args>` 运行（无需先 build）。
+
+---
+
+## 常用操作速查
+
+### 格式转换
 ```bash
-# 查看帮助
-cargo run --bin molflow -- --help
-
-# 显示水分子信息
-cargo run --bin molflow -- info -i examples/water.xyz
-
-# 输出应该显示:
-# 分子信息:
-#   原子数: 3
-#   总质量: 18.02 amu
-#   质心: (0.000, 0.000, 0.065)
+mol-convert -i structure.xyz -o structure.pdb
+mol-convert -i traj.dump    -o traj.extxyz
+mol-convert -i NaCl.cif     -o POSCAR
 ```
 
-### 第四步：理解代码流程
-
-当你运行 `molflow info -i water.xyz` 时，发生了什么？
-
-1. **CLI 解析** (`molflow-cli/src/main.rs`)
-   - clap 解析命令行参数
-   - 调用 `show_info()` 函数
-
-2. **读取文件** (`molflow-io/src/readers/xyz.rs`)
-   - `read_xyz()` 打开文件
-   - 解析原子坐标
-   - 创建 `Molecule` 对象
-
-3. **使用核心** (`molflow-core/src/molecule.rs`)
-   - 调用 `mol.atom_count()`
-   - 调用 `mol.total_mass()`
-   - 调用 `mol.center_of_mass()`
-
-4. **输出结果**
-   - 打印到终端
-
-## 常用操作示例
-
-### 1. 文件格式转换
+### 查看结构信息
 ```bash
-# XYZ -> PDB
-cargo run --bin molflow -- convert -i examples/water.xyz -o water.pdb
-
-# 查看生成的 PDB 文件
-cat water.pdb
+mol-info -i water.xyz
+mol-info -i NaCl.cif
+mol-info -i traj.dump        # 显示帧数、原子数、元素组成、晶胞参数
 ```
 
-### 2. 创建 Gaussian 输入文件
+### 生成 Gaussian 输入文件
 ```bash
-cargo run --bin molflow -- job \
-    -i examples/water.xyz \
-    -s gaussian \
-    -m B3LYP \
-    -o water.gjf
-
-# 查看生成的任务文件
-cat water.gjf
+mol-job -i water.xyz -s gaussian -m B3LYP -b "6-31G*" -o job.gjf
 ```
 
-### 3. 在 Rust 代码中使用
-创建文件 `examples/my_first_program.rs`:
+---
 
-```rust
-use molflow_io::read_xyz;
+## 轨迹分析
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 读取分子
-    let mol = read_xyz("examples/water.xyz")?;
-    
-    // 打印信息
-    println!("分子有 {} 个原子", mol.atom_count());
-    
-    // 遍历所有原子
-    for (i, atom) in mol.atoms.iter().enumerate() {
-        println!("原子 {}: {} 在 ({:.3}, {:.3}, {:.3})",
-            i + 1,
-            atom.element,
-            atom.position.x,
-            atom.position.y,
-            atom.position.z
-        );
-    }
-    
-    Ok(())
-}
-```
+所有分析命令：无 `-i` 时打印该模式的详细帮助（用途 / 参数 / 示例）。
 
-运行：
+### 径向分布函数
 ```bash
-# 在项目根目录创建示例程序
-cargo new --bin my_example
-cd my_example
-# 在 Cargo.toml 中添加依赖
-# [dependencies]
-# molflow-io = { path = "../molflow-io" }
-# molflow-core = { path = "../molflow-core" }
-# nalgebra = "0.32"
-# anyhow = "1.0"
-
-cargo run
+mol-traj -m gr -i traj.dump
+mol-traj -m gr -i traj.dump --r-max 8.0 --r-cut 3.2 --last-n 500
+# 输出：gr.dat + gr_cn.dat
 ```
 
-## 如何添加新功能
+### 结构因子
+```bash
+mol-traj -m sq -i traj.dump
+mol-traj -m sq -i traj.dump --weighting xrd --q-max 20.0
+```
 
-### 示例：添加新的文件格式 (MOL2)
+### 均方位移
+```bash
+mol-traj -m msd -i traj.dump --dt 2.0
+mol-traj -m msd -i traj.dump --elements Li --dt 1.0 --last-n 2000
+```
 
-1. **在 molflow-io 中添加读取器**
-   ```rust
-   // molflow-io/src/readers/mol2.rs
-   pub fn read_mol2(path: &str) -> Result<Molecule> {
-       // 实现 MOL2 解析逻辑
-       todo!()
-   }
-   ```
+### 键角分布
+```bash
+mol-traj -m angle -i traj.xyz --r-cut-ab 2.0
+```
 
-2. **在 mod.rs 中导出**
-   ```rust
-   // molflow-io/src/readers/mod.rs
-   pub mod mol2;
-   pub use mol2::read_mol2;
-   ```
+---
 
-3. **在 CLI 中添加支持**
-   ```rust
-   // 在 convert_file() 函数中添加格式判断
-   match input.split('.').last() {
-       Some("mol2") => read_mol2(input)?,
-       Some("xyz") => read_xyz(input)?,
-       // ...
-   }
-   ```
-
-## 学习建议
-
-### 对于 Rust 新手：
-1. 先学习基本的 Rust 语法
-2. 理解所有权（Ownership）概念
-3. 从阅读 `molflow-core` 开始，它最简单
-4. 尝试修改现有代码，看看会发生什么
-5. 编译器是你的朋友！仔细读错误信息
-
-### 对于计算化学专业人员：
-1. 关注 `molflow-io` 和 `molflow-workflow`
-2. 这些模块直接对应你熟悉的文件格式和软件
-3. 从添加你常用的文件格式开始
-4. 逐步添加你的工作流程
-
-### 推荐的学习顺序：
-1. 运行现有的命令行工具，熟悉功能
-2. 阅读 `molflow-core` 的代码，理解数据结构
-3. 阅读 `molflow-io` 的 XYZ 读取器，理解文件解析
-4. 尝试修改 CLI 工具，添加新命令
-5. 实现一个新的文件格式支持
-6. 添加自己需要的分析功能
-
-## 调试技巧
+## 相关函数
 
 ```bash
-# 查看详细编译信息
-cargo build --verbose
-
-# 运行测试
-cargo test
-
-# 查看某个模块的测试
-cargo test --package molflow-core
-
-# 格式化代码
-cargo fmt
-
-# 检查代码（比 build 快）
-cargo check
-
-# 查看依赖树
-cargo tree
+mol-corr -m vacf    -i traj.dump --dt 2.0        # 速度自相关
+mol-corr -m rotcorr -i traj.xyz --center O --neighbor H   # 转动相关
+mol-corr -m vanhove -i traj.dump --tau 100        # Van Hove 自相关
 ```
 
-## 遇到问题？
+---
 
-1. **编译错误**：仔细阅读错误信息，Rust 编译器会告诉你怎么修复
-2. **找不到函数**：检查 `use` 语句是否正确导入
-3. **类型不匹配**：查看函数签名，确保类型正确
-4. **文件找不到**：确保路径正确，使用相对路径或绝对路径
+## 空间分布（cube 格式）
 
-## 下一步
+```bash
+mol-cube -m density  -i traj.dump --nx 100 --ny 100 --nz 100
+mol-cube -m velocity -i traj.dump --elements Li
+mol-cube -m force    -i traj.dump -o force.cube
+# 输出为 Gaussian cube，用 VESTA / VMD 打开
+```
 
-- 尝试实现一个新的分析功能（如计算原子间距离）
-- 添加对你常用文件格式的支持
-- 将项目集成到你的工作流程中
-- 为项目贡献代码！
+---
+
+## 玻璃网络结构分析
+
+分析配位数、配体类型（FO/NBO/BO/OBO）和 Qn 物种分布。
+
+```bash
+# 磷酸盐体系
+mol-network -i traj.dump --P-O=2.3
+
+# 多元素体系
+mol-network -i traj.dump --P-O=2.3 --Si-O=1.8 --Al-O=2.0
+
+# 含 F 的体系
+mol-network -i traj.dump --P-O=2.3 --P-F=2.1
+
+# 输出 xlsx（三个 Sheet：CN / Ligand / Qn）
+mol-network -i traj.dump --P-O=2.3 --format xlsx -o result
+
+# 只分析最后 500 帧
+mol-network -i traj.dump --P-O=2.3 --last-n 500
+```
+
+参数格式：`--Former-Ligand=cutoff_Å`
+- Former 首字母大写（与 `--last-n` 等普通参数区分）
+- 无 `-i` 时打印使用帮助
+
+---
+
+## 并行与性能
+
+所有分析命令支持 `--ncore N` 指定线程数（默认使用全部核心）。
+
+```bash
+mol-traj -m gr -i large_traj.dump --ncore 8
+mol-cube -m density -i traj.dump --ncore 16
+```
+
+---
+
+## 测试
+
+```bash
+cargo test                          # 全部测试（约 146 个）
+cargo test --package molflow-io     # 单 crate
+cargo test --package molflow-analysis network   # 指定模块
+```
+
+---
+
+## 调试编译
+
+```bash
+cargo check                  # 快速语法检查（不生成二进制）
+cargo build                  # 调试版（更快编译，较慢运行）
+cargo build --release        # 发布版（慢编译，快运行）
+cargo fmt && cargo clippy    # 格式化 + lint
+```

@@ -1,3 +1,4 @@
+use crate::readers::lammps_dump::LammpsUnits;
 use molflow_core::Trajectory;
 use std::fs::File;
 use std::io::{BufWriter, Write};
@@ -5,9 +6,9 @@ use anyhow::{Context, Result};
 
 const EV_TO_KCAL: f64 = 1.0 / 0.04336410; // eV/Å → kcal/(mol·Å)
 
-/// 写 LAMMPS dump 文件，real 单位。
+/// 写 LAMMPS dump 文件。
 /// 包含列：id type element x y z [vx vy vz] [fx fy fz] [q]
-pub fn write_lammps_dump(trajectory: &Trajectory, path: &str) -> Result<()> {
+pub fn write_lammps_dump(trajectory: &Trajectory, path: &str, units: LammpsUnits) -> Result<()> {
     let file = File::create(path).with_context(|| format!("cannot create {path}"))?;
     let mut w = BufWriter::new(file);
 
@@ -82,16 +83,24 @@ pub fn write_lammps_dump(trajectory: &Trajectory, path: &str) -> Result<()> {
                     .and_then(|vv| vv.get(i))
                     .copied()
                     .unwrap_or_default();
-                line.push_str(&format!(" {:.10} {:.10} {:.10}", v.x, v.y, v.z));
+                // real: Å/fs (no-op), metal: Å/fs → Å/ps (×1000)
+                let vscale = match units {
+                    LammpsUnits::Real  => 1.0,
+                    LammpsUnits::Metal => 1000.0,
+                };
+                line.push_str(&format!(" {:.10} {:.10} {:.10}", v.x * vscale, v.y * vscale, v.z * vscale));
             }
             if has_force {
                 let f = frame.forces.as_ref()
                     .and_then(|ff| ff.get(i))
                     .copied()
                     .unwrap_or_default();
-                // Convert eV/Å → kcal/(mol·Å) for real units
-                line.push_str(&format!(" {:.10} {:.10} {:.10}",
-                    f.x * EV_TO_KCAL, f.y * EV_TO_KCAL, f.z * EV_TO_KCAL));
+                // real: eV/Å → kcal/(mol·Å), metal: eV/Å (no-op)
+                let fscale = match units {
+                    LammpsUnits::Real  => EV_TO_KCAL,
+                    LammpsUnits::Metal => 1.0,
+                };
+                line.push_str(&format!(" {:.10} {:.10} {:.10}", f.x * fscale, f.y * fscale, f.z * fscale));
             }
             if has_charge {
                 line.push_str(&format!(" {:.6}", atom.charge.unwrap_or(0.0)));
@@ -152,12 +161,13 @@ mod tests {
 
     #[test]
     fn test_roundtrip() {
+        use crate::readers::lammps_dump::LammpsUnits;
         let path = std::env::temp_dir().join("bcc_rt.dump");
         let p = path.to_str().unwrap();
         let orig = bcc_traj();
-        write_lammps_dump(&orig, p).unwrap();
+        write_lammps_dump(&orig, p, LammpsUnits::Real).unwrap();
 
-        let loaded = read_lammps_dump(p).unwrap();
+        let loaded = read_lammps_dump(p, LammpsUnits::Real).unwrap();
         assert_eq!(loaded.n_frames(), 2);
         let f = loaded.first().unwrap();
         assert_eq!(f.n_atoms(), 2);

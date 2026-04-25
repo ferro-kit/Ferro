@@ -14,6 +14,13 @@ pub fn write_pdb(trajectory: &Trajectory, path: &str) -> Result<()> {
 
     let multi = trajectory.n_frames() > 1;
 
+    // CRYST1 — write cell from first frame that has one
+    if let Some(cell) = trajectory.frames.iter().find_map(|f| f.cell.as_ref()) {
+        let [a, b, c] = cell.lengths();
+        let [al, be, ga] = cell.angles();
+        writeln!(writer, "CRYST1{:>9.3}{:>9.3}{:>9.3}{:>7.2}{:>7.2}{:>7.2} P 1           1", a, b, c, al, be, ga)?;
+    }
+
     for (model_idx, frame) in trajectory.frames.iter().enumerate() {
         if multi {
             writeln!(writer, "MODEL     {:>4}", model_idx + 1)?;

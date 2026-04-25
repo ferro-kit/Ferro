@@ -17,11 +17,11 @@ pub mod rotcorr;
 pub mod cube_density;
 pub mod scattering_data;
 
-pub use gr::{GrParams, GrResult, PairStats, calc_gr};
-pub use sq::{SqParams, SqResult, calc_sq_from_gr};
-pub use msd::{MsdParams, MsdResult, calc_msd};
-pub use angle::{AngleParams, AngleResult, AngleStats, calc_angle};
-pub use vanhove::{VanHoveParams, VanHoveResult, calc_vanhove};
-pub use vacf::{VacfParams, VacfResult, calc_vacf};
-pub use rotcorr::{RotCorrParams, RotCorrResult, calc_rotcorr};
+pub use gr::{GrParams, GrResult, PairStats, calc_gr, write_gr, write_cn};
+pub use sq::{SqParams, SqResult, SqWeighting, calc_sq_from_gr, write_sq};
+pub use msd::{MsdParams, MsdResult, calc_msd, write_msd};
+pub use angle::{AngleParams, AngleResult, AngleStats, calc_angle, write_angle};
+pub use vanhove::{VanHoveParams, VanHoveResult, calc_vanhove, write_vanhove};
+pub use vacf::{VacfParams, VacfResult, calc_vacf, write_vacf};
+pub use rotcorr::{RotCorrParams, RotCorrResult, calc_rotcorr, write_rotcorr};
 pub use cube_density::{CubeMode, CubeDensityParams, CubeDensityResult, calc_cube_density};

@@ -5,13 +5,25 @@ use anyhow::{Context, Result};
 
 const KCAL_TO_EV: f64 = 0.04336410;
 
-pub fn read_lammps_dump(path: &str) -> Result<Trajectory> {
-    let content = std::fs::read_to_string(path)
-        .with_context(|| format!("cannot open {path}"))?;
-    parse_lammps_dump(&content).with_context(|| format!("parsing {path}"))
+/// LAMMPS unit system for dump files.
+///
+/// Positions are always Å in both systems. Differences:
+/// - `Real`:  velocities Å/fs, forces kcal/(mol·Å)
+/// - `Metal`: velocities Å/ps, forces eV/Å
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum LammpsUnits {
+    #[default]
+    Real,
+    Metal,
 }
 
-fn parse_lammps_dump(content: &str) -> Result<Trajectory> {
+pub fn read_lammps_dump(path: &str, units: LammpsUnits) -> Result<Trajectory> {
+    let content = std::fs::read_to_string(path)
+        .with_context(|| format!("cannot open {path}"))?;
+    parse_lammps_dump(&content, units).with_context(|| format!("parsing {path}"))
+}
+
+fn parse_lammps_dump(content: &str, units: LammpsUnits) -> Result<Trajectory> {
     let lines: Vec<&str> = content.lines().collect();
     let mut i = 0;
     let mut traj = Trajectory::new();
@@ -150,24 +162,32 @@ fn parse_lammps_dump(content: &str) -> Result<Trajectory> {
                 atom.charge = parts.get(c).and_then(|s| s.parse().ok());
             }
 
-            // Velocity (real: Å/fs — same as internal)
+            // Velocity: real Å/fs (internal), metal Å/ps → ×1e-3
             let vel = if let (Some(vx), Some(vy), Some(vz)) =
                 (get_col("vx"), get_col("vy"), get_col("vz"))
             {
                 let x: f64 = parts.get(vx).and_then(|s| s.parse().ok()).unwrap_or(0.0);
                 let y: f64 = parts.get(vy).and_then(|s| s.parse().ok()).unwrap_or(0.0);
                 let z: f64 = parts.get(vz).and_then(|s| s.parse().ok()).unwrap_or(0.0);
-                Some(Vector3::new(x, y, z))
+                let vscale = match units {
+                    LammpsUnits::Real  => 1.0,
+                    LammpsUnits::Metal => 1e-3,
+                };
+                Some(Vector3::new(x, y, z) * vscale)
             } else { None };
 
-            // Forces (real: kcal/(mol·Å) → eV/Å)
+            // Force: real kcal/(mol·Å) → eV/Å, metal eV/Å already
+            let fscale = match units {
+                LammpsUnits::Real  => KCAL_TO_EV,
+                LammpsUnits::Metal => 1.0,
+            };
             let force = if let (Some(fx), Some(fy), Some(fz)) =
                 (get_col("fx"), get_col("fy"), get_col("fz"))
             {
                 let x: f64 = parts.get(fx).and_then(|s| s.parse().ok()).unwrap_or(0.0);
                 let y: f64 = parts.get(fy).and_then(|s| s.parse().ok()).unwrap_or(0.0);
                 let z: f64 = parts.get(fz).and_then(|s| s.parse().ok()).unwrap_or(0.0);
-                Some(Vector3::new(x * KCAL_TO_EV, y * KCAL_TO_EV, z * KCAL_TO_EV))
+                Some(Vector3::new(x * fscale, y * fscale, z * fscale))
             } else { None };
 
             atoms_raw.push((atom_id, atom, vel, force));
@@ -233,9 +253,21 @@ ITEM: ATOMS id type element x y z
         p.to_str().unwrap().to_string()
     }
 
+    const DUMP_VEL: &str = "ITEM: TIMESTEP
+0
+ITEM: NUMBER OF ATOMS
+1
+ITEM: BOX BOUNDS pp pp pp
+0 5.0
+0 5.0
+0 5.0
+ITEM: ATOMS id type element x y z vx vy vz
+1 1 Fe 0.0 0.0 0.0 2.0 0.0 0.0
+";
+
     #[test]
     fn test_multiframe() {
-        let traj = read_lammps_dump(&tmp("bcc.dump", DUMP_ORTHO)).unwrap();
+        let traj = read_lammps_dump(&tmp("bcc.dump", DUMP_ORTHO), LammpsUnits::Real).unwrap();
         assert_eq!(traj.n_frames(), 2);
         assert_eq!(traj.first().unwrap().n_atoms(), 2);
         assert_eq!(traj.first().unwrap().atom(0).element, "Fe");
@@ -243,8 +275,23 @@ ITEM: ATOMS id type element x y z
 
     #[test]
     fn test_box_bounds() {
-        let traj = read_lammps_dump(&tmp("box.dump", DUMP_ORTHO)).unwrap();
+        let traj = read_lammps_dump(&tmp("box.dump", DUMP_ORTHO), LammpsUnits::Real).unwrap();
         let [a, ..] = traj.first().unwrap().cell.as_ref().unwrap().lengths();
         assert!((a - 2.87).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_velocity_real_units() {
+        let traj = read_lammps_dump(&tmp("vel_real.dump", DUMP_VEL), LammpsUnits::Real).unwrap();
+        let vx = traj.first().unwrap().velocities.as_ref().unwrap()[0].x;
+        assert!((vx - 2.0).abs() < 1e-10, "real units: vx should be 2.0 Å/fs, got {vx}");
+    }
+
+    #[test]
+    fn test_velocity_metal_units() {
+        let traj = read_lammps_dump(&tmp("vel_metal.dump", DUMP_VEL), LammpsUnits::Metal).unwrap();
+        let vx = traj.first().unwrap().velocities.as_ref().unwrap()[0].x;
+        // 2.0 Å/ps × 1e-3 = 0.002 Å/fs
+        assert!((vx - 0.002).abs() < 1e-12, "metal units: vx should be 0.002 Å/fs, got {vx}");
     }
 }
