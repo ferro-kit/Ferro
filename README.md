@@ -1,40 +1,41 @@
-# molflow
+# nexflux
 
-用 Rust 编写的模块化计算化学工具包，主要面向**周期性体系**（晶体、表面、玻璃）。
+A modular computational chemistry toolkit written in Rust, designed primarily for **periodic systems** (crystals, surfaces, glasses).
 
-## 项目结构
+## Workspace Layout
 
 ```
-molflow/
-├── molflow-core/       # 核心数据结构（Atom, Frame, Trajectory, Cell）
-├── molflow-io/         # 文件读写（10 种格式）
-├── molflow-analysis/   # 后处理分析（MD 分析、玻璃网络结构分析）
-├── molflow-workflow/   # 计算输入文件生成（Gaussian 等）
-├── molflow-cli/        # 命令行工具集
-└── molflow-python/     # Python 绑定（PyO3，暂未启用）
+nexflux/
+├── nexflux-core/       # Core data structures (Atom, Frame, Trajectory, Cell)
+├── nexflux-io/         # File readers and writers (10+ formats)
+├── nexflux-analysis/   # Post-processing (MD analysis, glass network analysis)
+├── nexflux-workflow/   # QC input file generation (Gaussian, etc.)
+├── nexflux-cli/        # Command-line binaries
+└── nexflux-python/     # Python bindings via PyO3 (not yet enabled)
 ```
 
-依赖层次（严格单向，中间层不得互相依赖）：
+Dependency graph — strictly one-directional; middle-layer crates must not depend on each other:
+
 ```
-molflow-cli / molflow-python
-    ├── molflow-core
-    ├── molflow-io        → core
-    ├── molflow-analysis  → core
-    └── molflow-workflow  → core
+nexflux-cli / nexflux-python
+    ├── nexflux-core
+    ├── nexflux-io        → core
+    ├── nexflux-analysis  → core
+    └── nexflux-workflow  → core
 ```
 
-## 安装与编译
+## Build
 
 ```bash
 cargo build --release
 ```
 
-编译产物在 `target/release/`，包含以下可执行文件：
-`mol-convert`、`mol-info`、`mol-job`、`mol-traj`、`mol-corr`、`mol-cube`、`mol-network`
+Binaries are placed in `target/release/`:
+`nex-convert` · `nex-info` · `nex-job` · `nex-traj` · `nex-corr` · `nex-cube` · `nex-network`
 
-## 支持的文件格式
+## Supported File Formats
 
-| 格式 | 读 | 写 |
+| Format | Read | Write |
 |---|:---:|:---:|
 | XYZ | ✓ | ✓ |
 | Extended XYZ | ✓ | ✓ |
@@ -48,91 +49,100 @@ cargo build --release
 | Quantum ESPRESSO .in | ✓ | ✓ |
 | Gaussian cube | — | ✓ |
 
-## 命令行工具
+## CLI Reference
 
-### mol-convert — 格式转换
+### nex-convert — Format conversion
 ```bash
-mol-convert -i structure.xyz -o structure.pdb
-mol-convert -i traj.dump -o traj.extxyz
+nex-convert -i structure.xyz -o structure.pdb
+nex-convert -i traj.dump -o traj.extxyz
 ```
 
-### mol-info — 结构信息
+### nex-info — Print structure information
 ```bash
-mol-info -i water.xyz
-mol-info -i NaCl.cif
+nex-info -i water.xyz
+nex-info -i NaCl.cif
 ```
 
-### mol-job — 生成计算输入文件
+### nex-job — Generate QC input files
 ```bash
-mol-job -i water.xyz -s gaussian -m B3LYP -b "6-31G*" -o job.gjf
+nex-job -i water.xyz -s gaussian -m B3LYP -b "6-31G*" -o job.gjf
 ```
 
-### mol-traj — 轨迹结构分析
+### nex-traj — Structural trajectory analysis
 ```bash
-mol-traj -m gr    -i traj.dump                          # 径向分布函数 g(r)
-mol-traj -m sq    -i traj.dump --weighting both         # 结构因子 S(q)
-mol-traj -m msd   -i traj.dump --dt 2.0 --elements Li   # 均方位移
-mol-traj -m angle -i traj.dump --r-cut-ab 2.0           # 键角分布
-mol-traj -m gr                                          # 无 -i → 显示详细帮助
+nex-traj -m gr    -i traj.dump                         # Radial distribution function g(r)
+nex-traj -m sq    -i traj.dump --weighting both        # Structure factor S(q)
+nex-traj -m msd   -i traj.dump --dt 2.0 --elements Li  # Mean square displacement
+nex-traj -m angle -i traj.dump --r-cut-ab 2.0          # Bond-angle distribution
+nex-traj -m gr                                         # Run without -i to show mode help
 ```
 
-### mol-corr — 相关函数
+### nex-corr — Correlation functions
 ```bash
-mol-corr -m vacf    -i traj.dump --dt 2.0              # 速度自相关函数
-mol-corr -m rotcorr -i traj.xyz --center O --neighbor H # 转动相关函数
-mol-corr -m vanhove -i traj.dump --tau 100              # Van Hove 自相关函数
+nex-corr -m vacf    -i traj.dump --dt 2.0               # Velocity autocorrelation
+nex-corr -m rotcorr -i traj.xyz --center O --neighbor H  # Rotational correlation C₂(t)
+nex-corr -m vanhove -i traj.dump --tau 100               # Van Hove self-correlation Gs(r,τ)
 ```
 
-### mol-cube — 空间密度分布
+### nex-cube — Spatial density maps
 ```bash
-mol-cube -m density  -i traj.dump                      # 数密度 (原子/Å³)
-mol-cube -m velocity -i traj.dump                      # 速度场
-mol-cube -m force    -i traj.dump --elements O         # 力场
-```
-输出为 Gaussian cube 格式，可直接用 VESTA / VMD 可视化。
-
-### mol-network — 玻璃网络结构分析
-针对周期性体系（玻璃、晶体），分析网络形成体 (former) 与配体之间的连接拓扑。
-
-```bash
-# P-O 体系（截断半径 2.3 Å）
-mol-network -i traj.dump --P-O=2.3
-
-# 多元素体系，输出 xlsx
-mol-network -i traj.dump --P-O=2.3 --Si-O=1.8 --Al-O=2.0 --format xlsx -o result
-
-# 参数格式：--Former-Ligand=cutoff_in_Angstrom
-# Former 首字母大写（与 clap 普通参数区分）
+nex-cube -m density  -i traj.dump                # Number density (atoms/Å³)
+nex-cube -m velocity -i traj.dump                # Velocity field
+nex-cube -m force    -i traj.dump --elements O   # Force field
+nex-cube -m sdf      -i traj.dump --qn 3 --modifier Zn  # Cluster SDF (Kabsch-aligned)
 ```
 
-输出内容：
-- **CN 分布**：每种 (former, ligand) 对的配位数分布 + 平均值
-- **配体分类**：每个配体原子的类型（FO / NBO(X) / BO(X-Y) / OBO(X-Y-Z)）
-- **Qn 物种**：Q^n(mX) 分布（n = 桥接配体数，m = 异元素桥接数）
+Output is Gaussian cube format, readable by VESTA and VMD.
 
-CSV 输出三个文件（`_cn.csv`、`_ligand.csv`、`_qn.csv`）；xlsx 输出三个 Sheet。
+### nex-network — Glass network analysis
 
-## 内部单位
+Analyzes the connectivity topology between network formers and ligands in periodic systems (glasses, crystals).
 
-| 物理量 | 单位 |
+```bash
+# P–O system (cutoff 2.3 Å)
+nex-network -i traj.dump --P-O=2.3
+
+# Multi-element system, xlsx output
+nex-network -i traj.dump --P-O=2.3 --Si-O=1.8 --Al-O=2.0 --format xlsx -o result
+
+# Pair flag format: --Former-Ligand=cutoff_in_Angstrom  (Former is capitalized)
+```
+
+Output columns:
+
+| Output | Description |
 |---|---|
-| 长度 | Å |
-| 能量 | eV |
-| 力 | eV/Å |
-| 应力 | eV/Å³ |
-| 时间 | fs |
-| 质量 | amu |
+| CN distribution | Coordination number per (former, ligand) pair + mean |
+| Ligand classes | FO / NBO(X) / BO(X-Y) / OBO(X-Y-Z) per ligand atom |
+| Qn species | Q^n(mX) distribution — n = bridging ligands, m = hetero-element bridges |
 
-## 核心数据类型
+CSV: three files (`_cn.csv`, `_ligand.csv`, `_qn.csv`). Excel: three sheets in one `.xlsx`.
+
+## Internal Units
+
+| Quantity | Unit |
+|---|---|
+| Length | Å |
+| Energy | eV |
+| Force | eV/Å |
+| Stress | eV/Å³ |
+| Time | fs |
+| Mass | amu |
+| Charge | e |
+
+## Core Data Model
 
 ```rust
-// 始终以 Trajectory 作为顶层类型，单帧文件也是 Trajectory { frames: vec![frame] }
-pub struct Trajectory { pub frames: Vec<Frame>, pub metadata: TrajectoryMetadata }
+// Trajectory is always the top-level type, even for single-frame files.
+pub struct Trajectory {
+    pub frames: Vec<Frame>,
+    pub metadata: TrajectoryMetadata,
+}
 
 pub struct Frame {
     pub atoms: Vec<Atom>,
-    pub cell: Option<Cell>,           // None = 非周期性
-    pub pbc: [bool; 3],               // 各轴是否启用 PBC
+    pub cell: Option<Cell>,                 // None = non-periodic
+    pub pbc: [bool; 3],                     // PBC per axis
     pub energy: Option<f64>,
     pub forces: Option<Vec<Vector3<f64>>>,
     pub velocities: Option<Vec<Vector3<f64>>>,
@@ -141,7 +151,7 @@ pub struct Frame {
 
 pub struct Atom {
     pub element: String,
-    pub position: Vector3<f64>,       // Å，直角坐标
+    pub position: Vector3<f64>,             // Å, Cartesian
     pub label: Option<String>,
     pub mass: Option<f64>,
     pub magmom: Option<f64>,
@@ -149,17 +159,17 @@ pub struct Atom {
 }
 ```
 
-## 常用开发命令
+## Development Commands
 
 ```bash
-cargo build                          # 编译工作区
-cargo build --release                # 发布版
-cargo test                           # 全部测试（当前 146 个）
-cargo test --package molflow-io      # 单个 crate 测试
-cargo fmt && cargo clippy            # 格式化 + 静态检查
-cargo run --bin mol-info -- -i examples/water.xyz
+cargo build                           # Build workspace
+cargo build --release                 # Release build
+cargo test                            # Run all tests
+cargo test --package nexflux-io       # Test a single crate
+cargo fmt && cargo clippy             # Format and lint
+cargo run --bin nex-info -- -i examples/water.xyz
 ```
 
-## 测试文件
+## Example Files
 
-`tests/`（water.xyz, water.pdb, water.cif）、`examples/`（LAMMPS dump、CIF、LMP data、CP2K inp）
+`examples/` contains sample inputs: LAMMPS dump, CIF, LAMMPS data, and CP2K `.inp` files.
