@@ -1,9 +1,0 @@
-[package]
-name = "molflow-workflow"
-version.workspace = true
-edition.workspace = true
-
-[dependencies]
-molflow-core = { path = "../molflow-core" }
-serde.workspace = true
-anyhow.workspace = true

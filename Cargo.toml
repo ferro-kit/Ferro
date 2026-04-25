@@ -1,11 +1,11 @@
 [workspace]
 members = [
-    "molflow-core",
-    "molflow-io",
-    "molflow-analysis",
-    "molflow-workflow",
-    "molflow-cli",
-    # "molflow-python",  # 暂时注释掉，等熟悉 Rust 后再启用
+    "nexflux-core",
+    "nexflux-io",
+    "nexflux-analysis",
+    "nexflux-workflow",
+    "nexflux-cli",
+    # "nexflux-python",  # 暂时注释掉，等熟悉 Rust 后再启用
 ]
 resolver = "2"
 
@@ -27,6 +27,7 @@ serde = { version = "1.0", features = ["derive"] }
 # 错误处理
 thiserror = "1.0"
 anyhow = "1.0"
+petgraph = "0.6"
 
 [profile.release]
 opt-level = 3        # 默认就是 3，最高优化

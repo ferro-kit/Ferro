@@ -221,6 +221,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
+name = "fixedbitset"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ce7134b9999ecaf8bcd65542e436736ef32ddca1b3e06094cb6ec5755203b80"
+
+[[package]]
 name = "flate2"
 version = "1.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -291,61 +297,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "molflow"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "molflow-analysis",
- "molflow-core",
- "molflow-io",
- "molflow-workflow",
- "rayon",
- "rust_xlsxwriter",
-]
-
-[[package]]
-name = "molflow-analysis"
-version = "0.1.0"
-dependencies = [
- "molflow-core",
- "nalgebra",
- "ndarray",
- "rayon",
- "thiserror 1.0.69",
-]
-
-[[package]]
-name = "molflow-core"
-version = "0.1.0"
-dependencies = [
- "nalgebra",
- "ndarray",
- "serde",
- "thiserror 1.0.69",
-]
-
-[[package]]
-name = "molflow-io"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "molflow-core",
- "nalgebra",
- "ndarray",
- "thiserror 1.0.69",
-]
-
-[[package]]
-name = "molflow-workflow"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "molflow-core",
- "serde",
-]
-
-[[package]]
 name = "nalgebra"
 version = "0.32.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -384,6 +335,62 @@ dependencies = [
  "num-integer",
  "num-traits",
  "rawpointer",
+]
+
+[[package]]
+name = "nexflux"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "nexflux-analysis",
+ "nexflux-core",
+ "nexflux-io",
+ "nexflux-workflow",
+ "rayon",
+ "rust_xlsxwriter",
+]
+
+[[package]]
+name = "nexflux-analysis"
+version = "0.1.0"
+dependencies = [
+ "nalgebra",
+ "ndarray",
+ "nexflux-core",
+ "petgraph",
+ "rayon",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "nexflux-core"
+version = "0.1.0"
+dependencies = [
+ "nalgebra",
+ "ndarray",
+ "serde",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "nexflux-io"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "nalgebra",
+ "ndarray",
+ "nexflux-core",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "nexflux-workflow"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "nexflux-core",
+ "serde",
 ]
 
 [[package]]
@@ -435,6 +442,16 @@ name = "paste"
 version = "1.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
+
+[[package]]
+name = "petgraph"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b4c5cc86750666a3ed20bdaf5ca2a0344f9c67674cae0515bec2da16fbaa47db"
+dependencies = [
+ "fixedbitset",
+ "indexmap",
+]
 
 [[package]]
 name = "proc-macro2"

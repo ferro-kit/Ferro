@@ -7,21 +7,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 cargo build                                                    # build entire workspace
 cargo build --release
-cargo build --package molflow-core                             # single crate
+cargo build --package nexflux-core                             # single crate
 cargo test                                                     # all tests
-cargo test --package molflow-io                                # single crate
-cargo test --package molflow-core test_basic_molecule          # single test
+cargo test --package nexflux-io                                # single crate
+cargo test --package nexflux-core test_basic_molecule          # single test
 cargo fmt
 cargo clippy
 cargo check
 
-# CLI
-cargo run --bin molflow -- info -i examples/water.xyz
-cargo run --bin molflow -- convert -i input.xyz -o output.pdb
-cargo run --bin molflow -- job -i input.xyz -s gaussian -m B3LYP -o job.gjf
+# CLI (dev)
+cargo run --bin nex-convert -- -i input.xyz -o output.pdb
+cargo run --bin nex-info    -- -i input.xyz
+cargo run --bin nex-job     -- -i input.xyz -s gaussian -m B3LYP -o job.gjf
+cargo run --bin nex-traj    -- -m gr  -i traj.dump
+cargo run --bin nex-cube    -- -m sdf -i traj.dump --qn 3 --modifier Zn
 
-# Python bindings (requires maturin; molflow-python not yet in workspace)
-cd molflow-python && maturin develop
+# Python bindings (requires maturin; nexflux-python not yet in workspace)
+cd nexflux-python && maturin develop
 ```
 
 Test fixtures: `tests/` (water.xyz, water.pdb, water.cif)
@@ -33,25 +35,25 @@ Test fixtures: `tests/` (water.xyz, water.pdb, water.cif)
 Cargo workspace with a strict layered dependency graph. Middle-layer crates must NOT depend on each other — only the top-layer entry points combine them.
 
 ```
-molflow-cli / molflow-python        ← only layer that combines multiple crates
-    ├── molflow-core                ← pure data structures + static reference data
-    ├── molflow-io        → core    ← format readers/writers
-    ├── molflow-structure → core    ← supercell, vacuum, merge, box estimation
-    ├── molflow-analysis  → core    ← md/, dft/ (future), ml/ (future)
-    └── molflow-workflow  → core    ← QC software input file builders
+nexflux-cli / nexflux-python        ← only layer that combines multiple crates
+    ├── nexflux-core                ← pure data structures + static reference data
+    ├── nexflux-io        → core    ← format readers/writers
+    ├── nexflux-structure → core    ← supercell, vacuum, merge, box estimation
+    ├── nexflux-analysis  → core    ← md/, dft/ (future), ml/ (future)
+    └── nexflux-workflow  → core    ← QC software input file builders
 ```
 
 ### Crate responsibilities
 
 | Crate | Role |
 |---|---|
-| `molflow-core` | `Atom`, `Frame`, `Trajectory`, `Cell`; static element/compound data; error types; unit conversion |
-| `molflow-io` | Format readers (`read_xyz`, `read_pdb`, ...) and writers; returns/accepts `Trajectory` |
-| `molflow-structure` | Supercell, vacuum layer, merge, initial box estimation from compound data |
-| `molflow-analysis` | Sub-modules: `md/` (RMSD, MSD, Rg, RDF), `dft/` (future), `ml/` (future) |
-| `molflow-workflow` | QC input file builders: `GaussianJobBuilder`, `GromacsTopologyBuilder`, etc. |
-| `molflow-cli` | CLI + REPL + batch mode (shared interpreter) |
-| `molflow-python` | PyO3 wrappers only; pure Rust libs have zero Python awareness |
+| `nexflux-core` | `Atom`, `Frame`, `Trajectory`, `Cell`; static element/compound data; error types; unit conversion |
+| `nexflux-io` | Format readers (`read_xyz`, `read_pdb`, ...) and writers; returns/accepts `Trajectory` |
+| `nexflux-structure` | Supercell, vacuum layer, merge, initial box estimation from compound data |
+| `nexflux-analysis` | Sub-modules: `md/` (g(r), S(q), MSD, angle, VACF, rotcorr, VanHove, cube density, cluster SDF), `dft/` (future), `ml/` (future) |
+| `nexflux-workflow` | QC input file builders: `GaussianJobBuilder`, `GromacsTopologyBuilder`, etc. |
+| `nexflux-cli` | CLI + REPL + batch mode (shared interpreter) |
+| `nexflux-python` | PyO3 wrappers only; pure Rust libs have zero Python awareness |
 
 ---
 
@@ -100,9 +102,9 @@ pub struct Frame {
 
 **`Molecule` struct does not exist** — `Frame` covers all cases.
 
-### molflow-core file structure
+### nexflux-core file structure
 ```
-molflow-core/src/
+nexflux-core/src/
 ├── lib.rs
 ├── atom.rs
 ├── cell.rs
@@ -162,18 +164,18 @@ pub fn convert_pressure(value: f64, from: PressureUnit, to: PressureUnit) -> f64
 ```
 
 ### Error handling
-- Library crates: `molflow_core::error::ChemError` / `molflow_core::Result<T>`
+- Library crates: `nexflux_core::error::ChemError` / `nexflux_core::Result<T>`
 - CLI: `anyhow::Result`
 
 ---
 
-## Static Reference Data (molflow-core/data/)
+## Static Reference Data (nexflux-core/data/)
 
 ### elements.rs
 Per-element: symbol, atomic number, atomic mass, common oxidation states, electron configuration, electronegativity.
 
 ### compounds.rs
-Used by `molflow-structure` to estimate initial MD simulation box size:
+Used by `nexflux-structure` to estimate initial MD simulation box size:
 ```rust
 pub struct CompoundData {
     pub name: &'static str,
@@ -183,7 +185,7 @@ pub struct CompoundData {
     pub cas: Option<&'static str>,
 }
 ```
-Box estimation logic (V = Σ n_i·M_i / ρ_mix·Nₐ) lives in `molflow-structure`, not here.
+Box estimation logic (V = Σ n_i·M_i / ρ_mix·Nₐ) lives in `nexflux-structure`, not here.
 
 ---
 
@@ -191,30 +193,30 @@ Box estimation logic (V = Σ n_i·M_i / ρ_mix·Nₐ) lives in `molflow-structur
 
 ### 1. One-shot CLI
 ```bash
-molflow convert -i a.xyz -o b.pdb
+nexflux convert -i a.xyz -o b.pdb
 ```
 
 ### 2. Interactive REPL (rustyline)
 ```bash
-molflow
-molflow> read water.xyz
-molflow> supercell 2 2 1
-molflow> write POSCAR
+nexflux
+nexflux> read water.xyz
+nexflux> supercell 2 2 1
+nexflux> write POSCAR
 ```
 
 ### 3. Batch / script mode
 Same interpreter as REPL, non-interactive. For shell script integration.
 ```bash
-molflow -f workflow.mf
-echo -e "read water.xyz\nsupercell 2 2 1\nwrite POSCAR" | molflow
+nexflux -f workflow.mf
+echo -e "read water.xyz\nsupercell 2 2 1\nwrite POSCAR" | nexflux
 ```
 
 ### 4. Python library
-`import molflow` via PyO3 in `molflow-python`.
+`import nexflux` via PyO3 in `nexflux-python`.
 
-### molflow-cli internal structure
+### nexflux-cli internal structure
 ```
-molflow-cli/src/
+nexflux-cli/src/
 ├── main.rs          # mode detection
 ├── interpreter.rs   # shared command parser/executor (REPL + batch)
 ├── repl.rs          # rustyline interactive input
@@ -227,12 +229,12 @@ molflow-cli/src/
 
 ---
 
-## Python Bindings (molflow-python)
+## Python Bindings (nexflux-python)
 
 All PyO3 glue lives here. Library crates have zero Python awareness.
 
 ```
-molflow-python/src/
+nexflux-python/src/
 ├── lib.rs        # #[pymodule] entry
 ├── types.rs      # PyTrajectory (#[pyclass] wrapping inner: Trajectory)
 ├── io.rs
@@ -243,40 +245,98 @@ molflow-python/src/
 Return types: `Vec<f64>`, `HashMap<String, Vec<f64>>` — PyO3 converts automatically to Python list/dict. No numpy or polars Rust crates.
 
 ```toml
-# molflow-python/Cargo.toml — minimal deps
+# nexflux-python/Cargo.toml — minimal deps
 [dependencies]
 pyo3 = { version = "0.21", features = ["extension-module"] }
-molflow-core      = { path = "../molflow-core" }
-molflow-io        = { path = "../molflow-io" }
-molflow-structure = { path = "../molflow-structure" }
-molflow-analysis  = { path = "../molflow-analysis" }
+nexflux-core      = { path = "../nexflux-core" }
+nexflux-io        = { path = "../nexflux-io" }
+nexflux-structure = { path = "../nexflux-structure" }
+nexflux-analysis  = { path = "../nexflux-analysis" }
 ```
+
+---
+
+## CLI Binaries Reference
+
+| Binary | Mode / flag | Purpose |
+|---|---|---|
+| `nex-convert` | `-i <in> -o <out>` | Format conversion |
+| `nex-info` | `-i <file>` | Print structure info |
+| `nex-job` | `-i <file> -s gaussian [-m B3LYP] [-b 6-31G*]` | Generate QC input file |
+| `nex-traj` | `-m gr\|sq\|msd\|angle` | Structural analysis |
+| `nex-corr` | `-m vacf\|rotcorr\|vanhove` | Correlation functions |
+| `nex-cube` | `-m density\|velocity\|force\|sdf` | Spatial distribution maps |
+| `nex-network` | `--P-O=2.3 [--format csv\|xlsx]` | Glass network analysis |
+
+Common flags shared by all trajectory binaries: `--last-n N`, `--ncore N`, `--metal-units`.
+Run any binary without `-i` to print mode-specific help.
+
+### `nex-cube -m sdf` — Cluster SDF
+
+Identifies Qn-type clusters (connected components of network-former atoms sharing bridging ligands), aligns each to a reference via Kabsch + permutation enumeration, and outputs per-atom-type 3D probability density as Gaussian cube files.
+
+```
+nexflux-analysis/src/md/cube_sdf.rs
+```
+
+Key types:
+```rust
+pub struct ClusterSdfParams {
+    pub former: String,              // network former element, e.g. "P"
+    pub ligand: String,              // bridging ligand element, e.g. "O"
+    pub target_qn: u8,               // 0/1/2/3 — determined by max individual Qn in component
+    pub former_ligand_cutoff: f64,
+    pub modifier: Option<String>,    // modifier cation, e.g. Some("Zn")
+    pub modifier_cutoff: f64,
+    pub grid_res: f64,               // Å/voxel
+    pub sigma: f64,                  // Gaussian broadening in voxels
+    pub padding: f64,                // grid boundary margin in Å
+    pub rmsd_warn_threshold: f64,
+}
+```
+
+Atom-type labels: `P0/P1/P2/P3` (individual Qn), `Of/On/Ob` (O connectivity), modifier element symbol.
+Output: `<stem>_<label>.cube` per atom type (multi-family: `<stem>_fam<N>_<label>.cube`).
+
+### `nexflux-analysis/src/md/` file structure
+
+| File | Analysis |
+|---|---|
+| `gr.rs` | Radial distribution function g(r) + coordination number CN(r) |
+| `sq.rs` | Structure factor S(q) via Fourier transform of g(r) |
+| `msd.rs` | Mean square displacement (time-shift average, NPT-safe) |
+| `angle.rs` | Bond angle distribution P(θ) |
+| `vanhove.rs` | Van Hove self-correlation Gs(r, τ) |
+| `vacf.rs` | Velocity autocorrelation function |
+| `rotcorr.rs` | Rotational correlation C₂(t) for molecular bond vectors |
+| `cube_density.rs` | 3D spatial density / velocity / force maps |
+| `cube_sdf.rs` | Cluster SDF — Kabsch alignment + per-type density accumulation |
 
 ---
 
 ## Extending the Project
 
 ### Add a file format
-1. `molflow-io/src/readers/<fmt>.rs` — return `Result<Trajectory>`
-2. `molflow-io/src/writers/<fmt>.rs`
+1. `nexflux-io/src/readers/<fmt>.rs` — return `Result<Trajectory>`
+2. `nexflux-io/src/writers/<fmt>.rs`
 3. Export from `readers/mod.rs`, `writers/mod.rs`
-4. Add format detection in `molflow-cli/src/commands/io.rs`
-5. Add wrapper in `molflow-python/src/io.rs`
+4. Add format detection in `nexflux-cli/src/commands/io.rs`
+5. Add wrapper in `nexflux-python/src/io.rs`
 
 ### Add a structure operation
-1. Implement in `molflow-structure/src/` — takes/returns `Trajectory`
-2. `molflow-cli/src/commands/structure.rs`
-3. `molflow-python/src/structure.rs`
+1. Implement in `nexflux-structure/src/` — takes/returns `Trajectory`
+2. `nexflux-cli/src/commands/structure.rs`
+3. `nexflux-python/src/structure.rs`
 
 ### Add an analysis method
-1. Implement in `molflow-analysis/src/<domain>/`
-2. `molflow-cli/src/commands/analysis.rs`
-3. `molflow-python/src/analysis.rs`
+1. Implement in `nexflux-analysis/src/<domain>/`
+2. `nexflux-cli/src/commands/analysis.rs`
+3. `nexflux-python/src/analysis.rs`
 
 ### Add a QC software target
-1. Builder in `molflow-workflow/src/job_builder.rs`
-2. Templates in `molflow-workflow/src/templates.rs`
-3. CLI branch in `molflow-cli/src/commands/`
+1. Builder in `nexflux-workflow/src/job_builder.rs`
+2. Templates in `nexflux-workflow/src/templates.rs`
+3. CLI branch in `nexflux-cli/src/commands/`
 
 ---
 
@@ -291,4 +351,4 @@ molflow-analysis  = { path = "../molflow-analysis" }
 | `anyhow` | Error propagation in CLI |
 | `clap` | CLI argument parsing |
 | `rustyline` | Readline-style input for REPL (to be added to workspace deps) |
-| `pyo3` | Python bindings (molflow-python only) |
+| `pyo3` | Python bindings (nexflux-python only) |
