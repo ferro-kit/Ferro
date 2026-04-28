@@ -6,8 +6,8 @@
     pub shift: usize,        // origin spacing; default: 1
     pub dt: f64,             // time step [fs]; default: 1.0
 }
-", Header 2 ("output", ["unnumbered", "unlisted"], []) [Str "Output"], Para [Str "Columns: ", Code ("", [], []) "time[fs]", Str ", ", Code ("", [], []) "C(t)", Str ", ", Code ("", [], []) "integral[fs]"], Header 2 ("usage", ["unnumbered", "unlisted"], []) [Str "Usage"], CodeBlock ("", ["bash"], []) "nex-corr -m rotcorr -i traj.dump --center P --neighbor O --rcut 2.4 --dt 2.0 -o output.rotcorr
-", CodeBlock ("", ["rust"], []) "use nexflux_analysis::md::{RotCorrParams, calc_rotcorr, write_rotcorr};
+", Header 2 ("output", ["unnumbered", "unlisted"], []) [Str "Output"], Para [Str "Columns: ", Code ("", [], []) "time[fs]", Str ", ", Code ("", [], []) "C(t)", Str ", ", Code ("", [], []) "integral[fs]"], Header 2 ("usage", ["unnumbered", "unlisted"], []) [Str "Usage"], CodeBlock ("", ["bash"], []) "fe-corr -m rotcorr -i traj.dump --center P --neighbor O --rcut 2.4 --dt 2.0 -o output.rotcorr
+", CodeBlock ("", ["rust"], []) "use ferro_analysis::md::{RotCorrParams, calc_rotcorr, write_rotcorr};
 
 let params = RotCorrParams {
     center: \"P\".into(), neighbor: \"O\".into(),

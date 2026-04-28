@@ -6,12 +6,12 @@
     pub elements: Option<Vec<String>>,    // None = all atoms
 }
 ", Header 2 ("output", ["unnumbered", "unlisted"], []) [Str "Output"], Para [Str "A Gaussian cube file with raw occupancy counts per voxel.  Values are not normalised.  To convert to fractional occupancy, divide by $N_\\text{frames} \\cdot N_\\text{atoms}$."], Header 2 ("usage", ["unnumbered", "unlisted"], []) [Str "Usage"], CodeBlock ("", ["bash"], []) "# Li occupancy map, 100³ grid, radius 0.7 Å
-nex-cube -m radius -i traj.dump --elements Li --radius 0.7 --nx 100 --ny 100 --nz 100 -o li_radius.cube
+fe-cube -m radius -i traj.dump --elements Li --radius 0.7 --nx 100 --ny 100 --nz 100 -o li_radius.cube
 
 # All-atom occupancy
-nex-cube -m radius -i traj.dump --radius 1.0 -o all_radius.cube
-", CodeBlock ("", ["rust"], []) "use nexflux_analysis::md::{CubeRadiusParams, calc_cube_radius};
-use nexflux_io::write_cube;
+fe-cube -m radius -i traj.dump --radius 1.0 -o all_radius.cube
+", CodeBlock ("", ["rust"], []) "use ferro_analysis::md::{CubeRadiusParams, calc_cube_radius};
+use ferro_io::write_cube;
 
 let params = CubeRadiusParams {
     nx: 100, ny: 100, nz: 100,

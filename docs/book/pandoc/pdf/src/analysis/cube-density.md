@@ -6,18 +6,18 @@
     pub mode: CubeMode,                   // Density | Velocity | Force; default: Density
 }
 ", Header 2 ("output", ["unnumbered", "unlisted"], []) [Str "Output"], Para [Str "A Gaussian cube file (", Code ("", [], []) ".cube", Str "):"], BulletList [[Plain [Str "Header: time-averaged atomic positions + unit cell"]], [Plain [Str "Data: $n_x \\times n_y \\times n_z$ scalar field"]]], Para [Str "The cube format is directly accepted by VESTA, VMD, Ovito, and most electronic-structure visualisation packages."], Header 2 ("usage", ["unnumbered", "unlisted"], []) [Str "Usage"], CodeBlock ("", ["bash"], []) "# Number density of all atoms
-nex-cube -m density -i traj.dump --nx 80 --ny 80 --nz 80 -o density.cube
+fe-cube -m density -i traj.dump --nx 80 --ny 80 --nz 80 -o density.cube
 
 # Li-only density
-nex-cube -m density -i traj.dump --elements Li -o li_density.cube
+fe-cube -m density -i traj.dump --elements Li -o li_density.cube
 
 # Time-averaged velocity magnitude
-nex-cube -m velocity -i traj.dump --metal-units -o velocity.cube
+fe-cube -m velocity -i traj.dump --metal-units -o velocity.cube
 
 # Time-averaged force magnitude
-nex-cube -m force -i traj.dump -o force.cube
-", CodeBlock ("", ["rust"], []) "use nexflux_analysis::md::{CubeDensityParams, CubeMode, calc_cube_density};
-use nexflux_io::write_cube;
+fe-cube -m force -i traj.dump -o force.cube
+", CodeBlock ("", ["rust"], []) "use ferro_analysis::md::{CubeDensityParams, CubeMode, calc_cube_density};
+use ferro_io::write_cube;
 
 let params = CubeDensityParams {
     nx: 80, ny: 80, nz: 80,

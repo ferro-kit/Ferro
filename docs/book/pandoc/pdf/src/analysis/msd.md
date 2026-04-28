@@ -5,8 +5,8 @@
     pub dt: f64,                      // time step [fs]; default: 1.0
     pub elements: Option<Vec<String>>,// None = all atoms
 }
-", Header 2 ("output", ["unnumbered", "unlisted"], []) [Str "Output"], Para [Str "Columns: ", Code ("", [], []) "time[fs]", Str ", ", Code ("", [], []) "msd[Å²]", Str ", ", Code ("", [], []) "msd_a[Å²]", Str ", ", Code ("", [], []) "msd_b[Å²]", Str ", ", Code ("", [], []) "msd_c[Å²]"], Header 2 ("usage", ["unnumbered", "unlisted"], []) [Str "Usage"], CodeBlock ("", ["bash"], []) "nex-traj -m msd -i traj.dump --dt 2.0 --shift 10 -o output.msd
-", CodeBlock ("", ["rust"], []) "use nexflux_analysis::md::{MsdParams, calc_msd, write_msd};
+", Header 2 ("output", ["unnumbered", "unlisted"], []) [Str "Output"], Para [Str "Columns: ", Code ("", [], []) "time[fs]", Str ", ", Code ("", [], []) "msd[Å²]", Str ", ", Code ("", [], []) "msd_a[Å²]", Str ", ", Code ("", [], []) "msd_b[Å²]", Str ", ", Code ("", [], []) "msd_c[Å²]"], Header 2 ("usage", ["unnumbered", "unlisted"], []) [Str "Usage"], CodeBlock ("", ["bash"], []) "fe-traj -m msd -i traj.dump --dt 2.0 --shift 10 -o output.msd
+", CodeBlock ("", ["rust"], []) "use ferro_analysis::md::{MsdParams, calc_msd, write_msd};
 
 let params = MsdParams { tau: Some(1000), shift: 10, dt: 2.0,
     elements: Some(vec![\"Li\".into()]) };

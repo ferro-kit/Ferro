@@ -8,12 +8,12 @@
     pub record_at: JumpPosition,          // Start | End | Midpoint; default: Start
 }
 ", Header 2 ("output", ["unnumbered", "unlisted"], []) [Str "Output"], Para [Str "A Gaussian cube file with raw jump-event counts per voxel.  Typical post-processing:"], OrderedList (1, DefaultStyle, DefaultDelim) [[Plain [Str "Load in VESTA with isosurface rendering to visualise migration channels."]], [Plain [Str "Normalise by total jump count to obtain the spatial probability distribution."]]], Header 2 ("usage", ["unnumbered", "unlisted"], []) [Str "Usage"], CodeBlock ("", ["bash"], []) "# Jump origins for Li, lag = 1 frame, threshold = 1.0 Å
-nex-cube -m jump -i traj.dump --elements Li --tau 1 --threshold 1.0 -o jump.cube
+fe-cube -m jump -i traj.dump --elements Li --tau 1 --threshold 1.0 -o jump.cube
 
 # Jump midpoints (migration pathway visualisation)
-nex-cube -m jump -i traj.dump --elements Li --record-at midpoint -o jump_mid.cube
-", CodeBlock ("", ["rust"], []) "use nexflux_analysis::md::{CubeJumpParams, JumpPosition, calc_cube_jump};
-use nexflux_io::write_cube;
+fe-cube -m jump -i traj.dump --elements Li --record-at midpoint -o jump_mid.cube
+", CodeBlock ("", ["rust"], []) "use ferro_analysis::md::{CubeJumpParams, JumpPosition, calc_cube_jump};
+use ferro_io::write_cube;
 
 let params = CubeJumpParams {
     nx: 50, ny: 50, nz: 50,

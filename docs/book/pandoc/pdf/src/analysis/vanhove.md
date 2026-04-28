@@ -9,8 +9,8 @@ Accumulate into histogram bin $\\lfloor r / \\Delta r \\rfloor$."]], [Plain [Str
     pub dr: f64,                       // bin width [Å]; default: 0.01
     pub elements: Option<Vec<String>>, // None = all atoms
 }
-", Header 2 ("output", ["unnumbered", "unlisted"], []) [Str "Output"], Para [Str "Columns: ", Code ("", [], []) "r[Å]", Str ", ", Code ("", [], []) "Gs(r,tau)", Str " (normalised so sum = 1)."], Para [Str "The header records the lag time $\\tau$ in both frames and physical time (fs)."], Header 2 ("usage", ["unnumbered", "unlisted"], []) [Str "Usage"], CodeBlock ("", ["bash"], []) "nex-corr -m vanhove -i traj.dump --tau 500 --dt 2.0 -o output.vanhove
-", CodeBlock ("", ["rust"], []) "use nexflux_analysis::md::{VanHoveParams, calc_vanhove, write_vanhove};
+", Header 2 ("output", ["unnumbered", "unlisted"], []) [Str "Output"], Para [Str "Columns: ", Code ("", [], []) "r[Å]", Str ", ", Code ("", [], []) "Gs(r,tau)", Str " (normalised so sum = 1)."], Para [Str "The header records the lag time $\\tau$ in both frames and physical time (fs)."], Header 2 ("usage", ["unnumbered", "unlisted"], []) [Str "Usage"], CodeBlock ("", ["bash"], []) "fe-corr -m vanhove -i traj.dump --tau 500 --dt 2.0 -o output.vanhove
+", CodeBlock ("", ["rust"], []) "use ferro_analysis::md::{VanHoveParams, calc_vanhove, write_vanhove};
 
 let params = VanHoveParams {
     tau: Some(500), shift: 1, dt: 2.0,

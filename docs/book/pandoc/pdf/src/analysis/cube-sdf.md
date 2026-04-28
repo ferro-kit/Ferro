@@ -12,13 +12,13 @@
     pub rmsd_warn_threshold: f64,    // RMSD warning threshold [Å]; default: 0.5
 }
 ", Header 2 ("output", ["unnumbered", "unlisted"], []) [Str "Output"], Para [Str "One Gaussian cube file per atom type per family:"], BulletList [[Plain [Str "Single family: ", Code ("", [], []) "<stem>_<label>.cube", Str " (e.g. ", Code ("", [], []) "sdf_P3.cube", Str ", ", Code ("", [], []) "sdf_Ob.cube", Str ")"]], [Plain [Str "Multiple families: ", Code ("", [], []) "<stem>_fam0_<label>.cube", Str ", ", Code ("", [], []) "<stem>_fam1_<label>.cube", Str ", …"]]], Para [Str "All cube files within a family share the same grid origin and spacing, enabling direct overlay in VESTA or VMD."], Header 2 ("usage", ["unnumbered", "unlisted"], []) [Str "Usage"], CodeBlock ("", ["bash"], []) "# Q3 phosphate clusters with Zn modifier
-nex-cube -m sdf -i traj.dump --qn 3 --former P --ligand O --cutoff-fl 2.4 \\
+fe-cube -m sdf -i traj.dump --qn 3 --former P --ligand O --cutoff-fl 2.4 \\
          --modifier Zn --cutoff-ml 2.8 --grid-res 0.1 --sigma 1.5 -o sdf
 
 # Q0 isolated tetrahedra (no modifier)
-nex-cube -m sdf -i traj.dump --qn 0 --former P --ligand O -o q0_sdf
-", CodeBlock ("", ["rust"], []) "use nexflux_analysis::md::{ClusterSdfParams, calc_cluster_sdf};
-use nexflux_io::write_cube;
+fe-cube -m sdf -i traj.dump --qn 0 --former P --ligand O -o q0_sdf
+", CodeBlock ("", ["rust"], []) "use ferro_analysis::md::{ClusterSdfParams, calc_cluster_sdf};
+use ferro_io::write_cube;
 
 let params = ClusterSdfParams {
     former: \"P\".into(),

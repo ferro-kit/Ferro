@@ -11,9 +11,9 @@ pub enum SqWeighting {
     Neutron,  // neutron coherent scattering lengths
     Both,     // compute both simultaneously
 }
-", Header 2 ("output", ["unnumbered", "unlisted"], []) [Str "Output"], CodeBlock ("", ["bash"], []) "nex-traj -m sq -i traj.dump -o output
+", Header 2 ("output", ["unnumbered", "unlisted"], []) [Str "Output"], CodeBlock ("", ["bash"], []) "fe-traj -m sq -i traj.dump -o output
 # writes output.gr, output.sq
-", Para [Str "The ", Code ("", [], []) ".sq", Str " file header records both the g(r) parameters (used as input) and the S(q) parameters.", LineBreak, Str "Column ordering matches the ", Code ("", [], []) ".gr", Str " file. Additional columns ", Code ("", [], []) "total_xrd", Str " and/or ", Code ("", [], []) "total_neutron", Str " are appended when weighting is requested."], Header 2 ("usage", ["unnumbered", "unlisted"], []) [Str "Usage"], CodeBlock ("", ["rust"], []) "use nexflux_analysis::md::{GrParams, SqParams, SqWeighting, calc_gr, calc_sq_from_gr, write_sq};
+", Para [Str "The ", Code ("", [], []) ".sq", Str " file header records both the g(r) parameters (used as input) and the S(q) parameters.", LineBreak, Str "Column ordering matches the ", Code ("", [], []) ".gr", Str " file. Additional columns ", Code ("", [], []) "total_xrd", Str " and/or ", Code ("", [], []) "total_neutron", Str " are appended when weighting is requested."], Header 2 ("usage", ["unnumbered", "unlisted"], []) [Str "Usage"], CodeBlock ("", ["rust"], []) "use ferro_analysis::md::{GrParams, SqParams, SqWeighting, calc_gr, calc_sq_from_gr, write_sq};
 
 let gr = calc_gr(&traj, &GrParams::with_auto_rmax(&traj)).unwrap();
 let sq = calc_sq_from_gr(&gr, &SqParams {
@@ -21,4 +21,4 @@ let sq = calc_sq_from_gr(&gr, &SqParams {
     weighting: SqWeighting::Neutron,
 });
 write_sq(&gr, &sq, \"output.sq\").unwrap();
-", Header 2 ("implementation-notes", ["unnumbered", "unlisted"], []) [Str "Implementation Notes"], BulletList [[Plain [Str "The Fourier transform is parallelised over $q$ values with ", Code ("", [], []) "rayon::par_iter", Str "."]], [Plain [Str "Scattering data (form factors and neutron lengths) are stored as static tables in ", Code ("", [], []) "nexflux_analysis::md::scattering_data", Str "."]], [Plain [Str "For a single-element system, ", Code ("", [], []) "total_xrd ≈ total", Str " because all Faber-Ziman weights reduce to 1."]]]]
+", Header 2 ("implementation-notes", ["unnumbered", "unlisted"], []) [Str "Implementation Notes"], BulletList [[Plain [Str "The Fourier transform is parallelised over $q$ values with ", Code ("", [], []) "rayon::par_iter", Str "."]], [Plain [Str "Scattering data (form factors and neutron lengths) are stored as static tables in ", Code ("", [], []) "ferro_analysis::md::scattering_data", Str "."]], [Plain [Str "For a single-element system, ", Code ("", [], []) "total_xrd ≈ total", Str " because all Faber-Ziman weights reduce to 1."]]]]
